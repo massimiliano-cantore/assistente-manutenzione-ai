@@ -1,0 +1,49 @@
+name: Valutazione agente
+
+# Valutazione end-to-end con il modello vero: consuma chiamate all'API, quindi gira
+# a mano (Actions -> Valutazione agente -> Run workflow) e una volta a settimana.
+on:
+  workflow_dispatch:
+    inputs:
+      modello:
+        description: "Modello da valutare (vuoto = quello di config/agente.yaml)"
+        required: false
+  schedule:
+    - cron: "17 5 * * 1"   # lunedì mattina
+
+jobs:
+  valuta:
+    runs-on: ubuntu-latest
+    env:
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      LLM_MODEL: ${{ inputs.modello }}
+      EMBEDDER: fastembed
+      FASTEMBED_CACHE_PATH: /home/runner/.cache/fastembed
+    steps:
+      - uses: actions/checkout@v7
+      - name: Controllo della chiave
+        run: |
+          if [ -z "$GROQ_API_KEY" ]; then
+            echo "Manca il secret GROQ_API_KEY: Settings -> Secrets and variables -> Actions" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements.txt
+      - uses: actions/cache@v6
+        with:
+          path: /home/runner/.cache/fastembed
+          key: fastembed-${{ hashFiles('config/agente.yaml') }}
+      - name: Valutazione (fallisce sotto la soglia di config/agente.yaml)
+        run: |
+          echo "| Valutazione | Valore | Soglia | Esito |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          python -m valutazioni.valuta_agente
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: report-agente
+          path: valutazioni/report/

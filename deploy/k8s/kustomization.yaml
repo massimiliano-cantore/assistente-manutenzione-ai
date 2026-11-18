@@ -1,0 +1,13 @@
+# Kubernetes (facoltativo). Prova locale con kind:
+#   docker build -f docker/Dockerfile --target cmms -t kyros/cmms:locale .
+#   docker build -f docker/Dockerfile --target assistente -t kyros/assistente:locale .
+#   kind create cluster && kind load docker-image kyros/cmms:locale kyros/assistente:locale
+#   kubectl create namespace kyros
+#   kubectl -n kyros create secret generic llm --from-literal=GROQ_API_KEY=la-tua-chiave
+#   kubectl apply -k deploy/k8s && kubectl -n kyros port-forward svc/assistente 8000:80
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: kyros
+resources:
+  - cmms.yaml
+  - assistente.yaml

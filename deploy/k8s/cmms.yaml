@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cmms
+  labels: {app: cmms}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: cmms}
+  template:
+    metadata:
+      labels: {app: cmms}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 10001}
+      containers:
+        - name: cmms
+          image: kyros/cmms:locale
+          imagePullPolicy: IfNotPresent
+          ports: [{containerPort: 8001}]
+          env:
+            - {name: DB_CMMS, value: /tmp/cmms.db}
+          readinessProbe:
+            httpGet: {path: /health, port: 8001}
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet: {path: /health, port: 8001}
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cmms
+spec:
+  selector: {app: cmms}
+  ports: [{port: 80, targetPort: 8001}]

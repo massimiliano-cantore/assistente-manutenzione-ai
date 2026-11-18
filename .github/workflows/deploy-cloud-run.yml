@@ -1,0 +1,59 @@
+name: Deploy su Google Cloud Run
+
+# Pubblica le due immagini su Artifact Registry e aggiorna i servizi Cloud Run.
+# Configurazione una tantum: vedi deploy/cloud-run.md
+#   variabili (Settings -> Secrets and variables -> Actions -> Variables): GCP_PROJECT_ID, GCP_REGION
+#   secret: GCP_SA_KEY (chiave JSON del service account di deploy)
+#   in Secret Manager: groq-api-key (la chiave del modello)
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+env:
+  PROGETTO: ${{ vars.GCP_PROJECT_ID }}
+  REGIONE: ${{ vars.GCP_REGION }}
+  REGISTRO: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/assistente
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - run: gcloud auth configure-docker "$REGIONE-docker.pkg.dev" --quiet
+
+      - name: Build e push delle immagini
+        run: |
+          for t in cmms assistente; do
+            docker build -f docker/Dockerfile --target "$t" -t "$REGISTRO/$t:${{ github.sha }}" .
+            docker push "$REGISTRO/$t:${{ github.sha }}"
+          done
+
+      - id: cmms
+        uses: google-github-actions/deploy-cloudrun@v3
+        with:
+          service: kyros-cmms
+          region: ${{ env.REGIONE }}
+          image: ${{ env.REGISTRO }}/cmms:${{ github.sha }}
+          env_vars: DB_CMMS=/tmp/cmms.db
+          flags: --allow-unauthenticated --max-instances=1 --memory=1Gi
+
+      - id: assistente
+        uses: google-github-actions/deploy-cloudrun@v3
+        with:
+          service: kyros-assistente
+          region: ${{ env.REGIONE }}
+          image: ${{ env.REGISTRO }}/assistente:${{ github.sha }}
+          env_vars: CMMS_URL=${{ steps.cmms.outputs.url }}
+          secrets: GROQ_API_KEY=groq-api-key:latest
+          # 1 istanza: le conversazioni sono tenute in memoria (vedi README, "Limiti")
+          flags: --allow-unauthenticated --max-instances=1 --memory=2Gi --cpu=1
+
+      - name: Prova del servizio pubblicato
+        run: |
+          curl -sf "${{ steps.assistente.outputs.url }}/api/salute"
+          echo "Assistente online: ${{ steps.assistente.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"

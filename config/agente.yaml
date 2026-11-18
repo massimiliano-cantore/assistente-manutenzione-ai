@@ -1,0 +1,20 @@
+# Configurazione versionata dell'agente.
+# Ogni valutazione registra questi valori + il commit git, così ogni risultato è riproducibile.
+versione_prompt: v1            # file prompts/sistema_<versione>.md
+
+llm:
+  provider: groq               # groq | gemini | openai (qualsiasi API compatibile OpenAI)
+  modello: openai/gpt-oss-120b
+  # i modelli gratuiti cambiano spesso: se il primo non è disponibile si prova il successivo
+  alternative: [llama-3.3-70b-versatile, qwen/qwen3-32b, openai/gpt-oss-20b]
+  temperatura: 0
+  max_passi: 8                 # limite al ciclo agente -> strumenti
+
+rag:
+  embedder: fastembed          # fastembed (denso, multilingue) | tfidf (locale, senza download: test e CI veloce)
+  modello_embedding: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  top_k: 4
+
+soglie:                        # sotto queste soglie la CI fallisce
+  rag_hit_at_k: 0.80
+  agente_corrette: 0.80

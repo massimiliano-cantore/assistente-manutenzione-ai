@@ -1,0 +1,54 @@
+# Set di valutazione del recupero (retrieval): domande scritte come le farebbe un tecnico,
+# con parole DIVERSE da quelle dei titoli, e la sezione del manuale che dovrebbe uscire tra i primi k risultati.
+- domanda: la porta resta chiusa e non sento girare niente dentro la serratura
+  attesa: serratura#la-serratura-non-apre-e-il-motore-non-si-sente
+- domanda: il motorino della serratura va ma lo scrocco resta fermo
+  attesa: serratura#il-motore-gira-ma-il-catenaccio-non-si-muove
+- domanda: il catenaccio è duro, fa fatica a scorrere
+  attesa: serratura#catenaccio-bloccato-o-che-scorre-a-fatica
+- domanda: la maniglia rimane giù e non torna su da sola
+  attesa: serratura#la-serratura-si-apre-ma-la-maniglia-e-lenta-o-non-rientra
+- domanda: il sistema dice che la porta è aperta ma in realtà è chiusa
+  attesa: serratura#la-centrale-segnala-porta-aperta-anche-a-porta-chiusa
+- domanda: avvicino la chiave elettronica al cilindro e non succede nulla
+  attesa: cilindro#il-cilindro-non-reagisce-alla-chiave-elettronica
+- domanda: sento lo scatto ma il pomello gira libero senza aprire
+  attesa: cilindro#la-bobina-scatta-ma-il-pomolo-gira-a-vuoto
+- domanda: cilindro montato all'esterno pieno di acqua
+  attesa: cilindro#infiltrazioni-d-acqua-nei-cilindri-da-esterno
+- domanda: la camma del cilindro si è piegata dopo il montaggio
+  attesa: cilindro#leva-o-camma-del-cilindro-deformata
+- domanda: il motore del cilindro va a strappi
+  attesa: cilindro#il-motore-del-cilindro-gira-a-scatti
+- domanda: la centralina è morta, nessun led acceso
+  attesa: centralina#la-centralina-non-si-accende
+- domanda: la centralina continua a ripartire da sola durante il giorno
+  attesa: centralina#la-centralina-si-riavvia-da-sola
+- domanda: scheda della centralina con polvere e condensa
+  attesa: centralina#circuito-sporco-o-con-segni-di-umidita
+- domanda: la centralina non vede quando apro la porta
+  attesa: centralina#gli-ingressi-porta-non-rilevano-l-apertura
+- domanda: come si porta la centralina alla versione V17
+  attesa: centralina#aggiornamento-firmware-della-centralina
+- domanda: avvicino il tesserino al lettore ma non lo riconosce
+  attesa: lettore#il-lettore-non-legge-i-badge
+- domanda: devo appoggiare il badge quasi attaccato per farlo leggere
+  attesa: lettore#il-lettore-legge-solo-a-distanza-ravvicinata
+- domanda: il lettore badge non parla con la centrale
+  attesa: lettore#il-lettore-non-comunica-con-la-centralina
+- domanda: al banco il lettore funziona benissimo, il cliente dice di no
+  attesa: lettore#nessun-difetto-riscontrato-al-banco
+- domanda: premo alcuni numeri della tastiera e non succede niente
+  attesa: tastiera#alcuni-tasti-non-rispondono
+- domanda: la tastiera suona in continuazione
+  attesa: tastiera#la-tastiera-emette-un-allarme-continuo
+- domanda: dopo un blackout la tastiera ha dimenticato tutti i codici
+  attesa: tastiera#la-tastiera-si-spegne-o-perde-il-codice
+- domanda: per quanto tempo un prodotto è coperto da garanzia
+  attesa: procedure#garanzia
+- domanda: quando conviene rottamare invece di riparare
+  attesa: procedure#esiti-possibili-di-una-riparazione
+- domanda: in quali casi devo aprire un intervento nel gestionale della manutenzione
+  attesa: procedure#quando-aprire-un-ordine-di-lavoro
+- domanda: cosa devo provare prima di rispedire un pezzo riparato
+  attesa: procedure#collaudo-finale

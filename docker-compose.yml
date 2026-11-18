@@ -1,0 +1,36 @@
+# Tutto il sistema in locale:  cp .env.example .env  (inserisci la chiave)  ->  docker compose up --build
+#   interfaccia + API     http://localhost:8000
+#   CMMS (API, Swagger)   http://localhost:8001/docs
+#   Qdrant (dashboard)    http://localhost:6333/dashboard
+#   Prometheus            http://localhost:9090
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.20.2
+    ports: ["6333:6333"]
+    volumes: [qdrant-dati:/qdrant/storage]
+
+  cmms:
+    build: {context: ., dockerfile: docker/Dockerfile, target: cmms}
+    ports: ["8001:8001"]
+    environment:
+      DB_CMMS: /tmp/cmms.db
+
+  assistente:
+    build: {context: ., dockerfile: docker/Dockerfile, target: assistente}
+    ports: ["8000:8000"]
+    env_file: [{path: .env, required: false}]
+    environment:
+      QDRANT_URL: http://qdrant:6333        # indice sul server Qdrant invece che su disco
+      CMMS_URL: http://cmms:8001            # l'agente parla con il CMMS via HTTP
+    depends_on:
+      qdrant: {condition: service_started}
+      cmms: {condition: service_healthy}
+
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    ports: ["9090:9090"]
+    volumes: [./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro]
+    depends_on: [assistente]
+
+volumes:
+  qdrant-dati:

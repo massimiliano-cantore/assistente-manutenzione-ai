@@ -1,0 +1,42 @@
+# Valutazione end-to-end dell'agente con il modello vero (serve la chiave API).
+# Ogni caso controlla la RISPOSTA (valori attesi) e il COMPORTAMENTO (strumenti usati, conferma richiesta).
+#   sql:          i valori della prima riga devono comparire nella risposta
+#   contiene:     testi che devono comparire nella risposta (senza distinzione maiuscole/minuscole)
+#   strumenti:    strumenti che l'agente deve aver usato
+#   ricambio:     [codice, campo] -> il valore nel CMMS deve comparire nella risposta
+#   azione:       l'agente deve fermarsi chiedendo conferma per questa azione
+- domanda: Quanti rientri ci sono stati nel 2024?
+  sql: SELECT COUNT(*) FROM rientri WHERE anno=2024
+  strumenti: [interroga_archivio]
+- domanda: Qual è la famiglia di prodotto con più rientri?
+  sql: SELECT famiglia FROM rientri GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 1
+  strumenti: [interroga_archivio]
+- domanda: Qual è il componente sostituito più spesso? Dammi il codice.
+  sql: SELECT codice FROM pezzi GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 1
+  strumenti: [interroga_archivio]
+- domanda: Quanti rientri sono ancora aperti?
+  sql: SELECT COUNT(*) FROM rientri WHERE data_chiusura IS NULL
+  strumenti: [interroga_archivio]
+- domanda: Un lettore di badge non riconosce più i tesserini. Cosa devo controllare?
+  contiene: [BOB5510]
+  strumenti: [cerca_manuale]
+- domanda: Una centralina arriva con acqua dentro e il circuito sporco. Come procedo e cosa si sostituisce di solito in questi casi?
+  contiene: [SCB1180]
+  strumenti: [cerca_manuale, casi_simili]
+- domanda: Il motore della serratura gira ma il catenaccio non si muove. Quali pezzi devo guardare?
+  contiene: [PIG1120]
+  strumenti: [cerca_manuale]
+- domanda: Per quanti mesi vale la garanzia?
+  contiene: ["24"]
+  strumenti: [cerca_manuale]
+- domanda: Quanti pezzi del ricambio SCB1180 abbiamo in magazzino?
+  ricambio: [SCB1180, giacenza]
+  strumenti: [verifica_ricambio]
+- domanda: Quali impianti ha il cliente NOVAPORTA SRL? Dimmi l'id del primo.
+  contiene: [IMP-]
+  strumenti: [cerca_impianto]
+- domanda: Apri un ordine di lavoro con priorità alta per l'impianto IMP-04042 per verificare l'impianto del cliente, che ha avuto 3 rientri negli ultimi sei mesi.
+  azione: apri_ordine_di_lavoro
+- domanda: Il cliente NOVAPORTA SRL ha un impianto con molti rientri. Trova l'impianto e apri un ordine di lavoro per una verifica in campo.
+  azione: apri_ordine_di_lavoro
+  strumenti: [cerca_impianto]
