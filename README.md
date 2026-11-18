@@ -70,7 +70,13 @@ docker compose up --build          # UI + API on http://localhost:8000, CMMS doc
 | What | Metric | Result |
 |---|---|---|
 | Retrieval, 26 technician-style questions (paraphrased, not copied from titles) | hit@4 / MRR | TF-IDF baseline **0.81 / 0.73**; dense multilingual MiniLM **0.85 / 0.74** |
-| Agent end-to-end, 12 cases (numbers from SQL, procedures, CMMS stock, approval requested) | correct answers | run *Actions → Valutazione agente* (needs `GROQ_API_KEY`) |
+| Agent end-to-end, 12 cases (numbers from SQL, procedures, CMMS stock, approval requested) | correct answers | prompt v1: 10/12 and 9/12 · prompt v2: **12/12** (Groq, `openai/gpt-oss-120b`) |
+
+How v1 became v2, driven by the evaluation logs: a tool returned an empty list that Groq rejects (fixed in code,
+regression test added); the model searched a plant id as a serial number (tool now accepts the id, prompt states the
+code formats); the model skipped similar cases for a fault (prompt now requires both sources); one "wrong" answer was
+actually right but used a typographic hyphen (evaluator fixed). With 12 cases and a non-deterministic model a single
+run is indicative: the weekly run tracks stability.
 
 Each run writes a JSON report with the configuration (model, prompt version, embedder) and the git commit,
 so results stay comparable across prompt and model changes.
