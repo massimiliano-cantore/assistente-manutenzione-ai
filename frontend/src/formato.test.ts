@@ -13,7 +13,7 @@ describe("riassunto dei passi", () => {
     expect(riassunto(p)).toContain("il modello riprova");
   });
   it("conta i risultati della ricerca", () => {
-    const p = { strumento: "cerca_manuale", argomenti: { domanda: "badge" }, esito: [{}, {}], errore: false };
+    const p = { strumento: "cerca_manuale", argomenti: { domanda: "badge" }, esito: { risultati: [{}, {}], trovati: 2 }, errore: false };
     expect(riassunto(p)).toBe("badge → 2 risultati");
     expect(nomeStrumento("cerca_manuale")).toBe("Manuali tecnici");
   });

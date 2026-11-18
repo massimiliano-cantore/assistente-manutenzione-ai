@@ -58,6 +58,9 @@ def main() -> None:
             esito = {"domanda": caso["domanda"], "ok": False, "errore": str(e)[:300]}
         dettaglio.append(esito)
         print(("OK " if esito["ok"] else "NO ") + caso["domanda"], esito.get("controlli", esito.get("errore")))
+        if not esito["ok"]:   # nel log della CI si vede subito perché ha sbagliato
+            print("   strumenti:", esito.get("strumenti_usati"), "| risposta:",
+                  (esito.get("risposta") or "").replace("\n", " ")[:400])
         time.sleep(2)   # quota gratuita: poche richieste al minuto
     corrette = sum(d["ok"] for d in dettaglio)
     secondi = [d["secondi"] for d in dettaglio if "secondi" in d]

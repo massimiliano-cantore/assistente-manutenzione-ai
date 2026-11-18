@@ -21,6 +21,7 @@ export function riassunto(p: Passo): string {
   const e = p.esito as Record<string, unknown> | unknown[] | null;
   let quanti = "";
   if (Array.isArray(e)) quanti = `${e.length} risultati`;
+  else if (e && typeof e === "object" && "trovati" in e) quanti = `${e.trovati} risultati`;
   else if (e && typeof e === "object" && "righe_totali" in e) quanti = `${e.righe_totali} righe`;
   else if (e && typeof e === "object" && "errore" in e) quanti = "errore, il modello riprova";
   else if (e && typeof e === "object" && "esito" in e) quanti = String(e.esito);

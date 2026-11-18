@@ -23,7 +23,7 @@ def test_risposta_con_rag(crea):
     r = c.assistente.chiedi("Un lettore 31220 non legge più i badge, cosa controllo?")
     assert "BOB5510" in r.testo
     assert [p["strumento"] for p in r.passi] == ["cerca_manuale"]
-    assert r.passi[0]["esito"][0]["sezione"] == "lettore#il-lettore-non-legge-i-badge"
+    assert r.passi[0]["esito"]["risultati"][0]["sezione"] == "lettore#il-lettore-non-legge-i-badge"
     assert "Sei l'assistente tecnico" in llm.ricevuti[0][0].content          # prompt di sistema versionato
 
 
@@ -79,3 +79,12 @@ def test_api_chat_conferma_metriche(crea):
         m = client.get("/metrics").text
         assert "assistente_chiamate_strumenti_totali" in m and "assistente_token_totali" in m
         assert client.post("/api/chat", json={"messaggio": ""}).status_code == 422
+
+
+def test_ricerca_vuota_non_rompe_il_messaggio(crea):
+    """Bug trovato dalla valutazione con il modello vero: una lista vuota diventava un messaggio vuoto,
+    rifiutato da Groq con errore 400. Ora gli strumenti restituiscono sempre un oggetto con una nota."""
+    c, llm = crea(chiamata("cerca_impianto", cliente="CLIENTE INESISTENTE"), testo("Nessun impianto."))
+    r = c.assistente.chiedi("Impianti del cliente inesistente?")
+    assert r.passi[0]["esito"] == {"risultati": [], "trovati": 0, "nota": r.passi[0]["esito"]["nota"]}
+    assert isinstance(llm.ricevuti[1][-1].content, str) and llm.ricevuti[1][-1].content   # mai vuoto

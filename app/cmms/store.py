@@ -6,6 +6,7 @@ coincidono con quelli che l'agente trova nello storico.
 """
 from __future__ import annotations
 
+import re
 import sqlite3
 import threading
 from datetime import date
@@ -24,6 +25,7 @@ CREATE TABLE ordini (id TEXT PRIMARY KEY, impianto_id TEXT REFERENCES impianti(i
                      priorita TEXT, stato TEXT, ricambi TEXT, creato_il DATE, creato_da TEXT);
 """
 PRIORITA = ("bassa", "media", "alta")
+FORME_SOCIETARIE = {"SRL", "SPA", "SNC", "SAS", "SRLS", "SS"}
 
 
 class CMMSStore:
@@ -61,8 +63,12 @@ class CMMSStore:
     # --- letture ----------------------------------------------------------------------------------------
     def cerca_impianti(self, cliente: str = "", seriale: str = "", articolo: str = "", limite: int = 20) -> list[dict]:
         q, par = "SELECT * FROM impianti WHERE 1=1", []
-        if cliente:
-            q += " AND cliente LIKE ?"; par.append(f"%{cliente}%")
+        # "NovaPorta s.r.l." trova "NOVAPORTA SRL": ogni parola significativa deve comparire nel nome
+        parole = [p for p in re.sub(r"[^\w\s]", "", cliente.upper()).split() if p not in FORME_SOCIETARIE]
+        if cliente.strip() and not parole:
+            return []
+        for parola in parole:
+            q += " AND cliente LIKE ?"; par.append(f"%{parola}%")
         if seriale:
             q += " AND seriale = ?"; par.append(seriale.strip().upper())
         if articolo:

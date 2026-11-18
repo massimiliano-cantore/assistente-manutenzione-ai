@@ -26,3 +26,9 @@ def test_crea_ordine_e_validazione(cmms):
         cmms.crea_ordine(imp["id"], "intervento di prova", "media", ["XYZ000"])
     with pytest.raises(ErroreCMMS):
         cmms.crea_ordine(imp["id"], "intervento di prova", "urgentissima", [])   # priorità non ammessa
+
+
+def test_ricerca_cliente_tollerante(cmms):
+    esatto = cmms.cerca_impianti(cliente="NOVAPORTA SRL")
+    assert esatto and cmms.cerca_impianti(cliente="NovaPorta s.r.l.") == esatto
+    assert cmms.cerca_impianti(cliente="srl") == []          # solo la forma societaria: nessun filtro sensato
