@@ -69,7 +69,7 @@ docker compose up --build          # UI + API on http://localhost:8000, CMMS doc
 
 | What | Metric | Result |
 |---|---|---|
-| Retrieval, 26 technician-style questions (paraphrased, not copied from titles) | hit@4 / MRR | TF-IDF baseline **0.81 / 0.73**; dense model: see the `rag-denso` CI job |
+| Retrieval, 26 technician-style questions (paraphrased, not copied from titles) | hit@4 / MRR | TF-IDF baseline **0.81 / 0.73**; dense multilingual MiniLM **0.85 / 0.74** |
 | Agent end-to-end, 12 cases (numbers from SQL, procedures, CMMS stock, approval requested) | correct answers | run *Actions → Valutazione agente* (needs `GROQ_API_KEY`) |
 
 Each run writes a JSON report with the configuration (model, prompt version, embedder) and the git commit,
