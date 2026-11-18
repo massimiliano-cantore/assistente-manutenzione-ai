@@ -48,11 +48,15 @@ def crea_strumenti(archivio: ArchivioResi, kb: KnowledgeBase, cmms: ClienteCMMS)
         return archivio.sql(query)
 
     @tool
-    def cerca_impianto(cliente: str = "", seriale: str = "", articolo: str = "") -> dict:
-        """Cerca nel CMMS gli impianti installati presso i clienti, per nome cliente (anche parziale),
-        numero di serie o codice articolo. Restituisce id impianto, articolo, seriale e rientri negli ultimi 6 mesi."""
+    def cerca_impianto(impianto_id: str = "", cliente: str = "", seriale: str = "", articolo: str = "") -> dict:
+        """Cerca nel CMMS gli impianti installati presso i clienti: per id impianto (formato 'IMP-00042'),
+        nome cliente (anche parziale), numero di serie (formato 'KY23040424') o codice articolo.
+        Restituisce id impianto, articolo, seriale, rientri negli ultimi 6 mesi e ordini già aperti."""
+        if impianto_id:
+            imp = cmms.impianto(impianto_id.strip().upper())
+            return _risultati([imp] if imp else [], f"nessun impianto con id {impianto_id}")
         if not (cliente or seriale or articolo):
-            return {"errore": "indica almeno cliente, seriale o articolo"}
+            return {"errore": "indica almeno id impianto, cliente, seriale o articolo"}
         return _risultati(cmms.cerca_impianti(cliente, seriale, articolo),
                           "nessun impianto trovato: riprova con una parte del nome cliente o con il seriale")
 

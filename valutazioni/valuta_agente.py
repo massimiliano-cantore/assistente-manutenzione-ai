@@ -16,7 +16,9 @@ from valutazioni.comune import salva_report, verifica_soglia
 
 
 def norm(x) -> str:
-    s = re.sub(r"(?<=\d)[.\s](?=\d{3}\b)", "", str(x))   # 1.651 / 1 651 -> 1651
+    s = re.sub(r"[\u2010-\u2015\u2212]", "-", str(x))      # trattini tipografici -> '-' (IMP‑04042)
+    s = s.replace("\u00a0", " ").replace("\u202f", " ")      # spazi non separabili
+    s = re.sub(r"(?<=\d)[.\s](?=\d{3}\b)", "", s)           # 1.651 / 1 651 -> 1651
     return s.lower().replace("*", "").replace("`", "")
 
 

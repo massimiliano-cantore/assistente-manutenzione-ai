@@ -75,7 +75,7 @@ def test_api_chat_conferma_metriche(crea):
         r2 = client.post("/api/conferma", json={"thread_id": r["thread_id"], "approvato": True}).json()
         assert r2["testo"] == "Fatto."
         s = client.get("/api/salute").json()
-        assert s["stato"] == "ok" and s["versione_prompt"] == "v1"
+        assert s["stato"] == "ok" and s["versione_prompt"] == "v2"
         m = client.get("/metrics").text
         assert "assistente_chiamate_strumenti_totali" in m and "assistente_token_totali" in m
         assert client.post("/api/chat", json={"messaggio": ""}).status_code == 422
@@ -88,3 +88,9 @@ def test_ricerca_vuota_non_rompe_il_messaggio(crea):
     r = c.assistente.chiedi("Impianti del cliente inesistente?")
     assert r.passi[0]["esito"] == {"risultati": [], "trovati": 0, "nota": r.passi[0]["esito"]["nota"]}
     assert isinstance(llm.ricevuti[1][-1].content, str) and llm.ricevuti[1][-1].content   # mai vuoto
+
+
+def test_cerca_impianto_per_id(crea):
+    c, _ = crea(chiamata("cerca_impianto", impianto_id="imp-04042"), testo("Trovato."))
+    r = c.assistente.chiedi("Verifica l'impianto IMP-04042")
+    assert r.passi[0]["esito"]["risultati"][0]["id"] == "IMP-04042"

@@ -1,6 +1,6 @@
 # Configurazione versionata dell'agente.
 # Ogni valutazione registra questi valori + il commit git, così ogni risultato è riproducibile.
-versione_prompt: v1            # file prompts/sistema_<versione>.md
+versione_prompt: v2            # file prompts/sistema_<versione>.md
 
 llm:
   provider: groq               # groq | gemini | openai (qualsiasi API compatibile OpenAI)
