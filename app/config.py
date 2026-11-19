@@ -10,6 +10,24 @@ import yaml
 
 RADICE = Path(__file__).resolve().parents[1]
 
+
+def carica_env(percorso: Path = RADICE / ".env") -> None:
+    """Legge il file .env (CHIAVE=valore) e lo mette nelle variabili d'ambiente, senza sovrascrivere quelle
+    già impostate. Così in locale basta copiare .env.example in .env e inserire la chiave."""
+    if not percorso.exists():
+        return
+    for riga in percorso.read_text(encoding="utf-8").splitlines():
+        riga = riga.strip()
+        if not riga or riga.startswith("#") or "=" not in riga:
+            continue
+        chiave, _, valore = riga.partition("=")
+        valore = valore.strip().strip('"').strip("'")
+        if valore:
+            os.environ.setdefault(chiave.strip(), valore)
+
+
+carica_env()
+
 PROVIDER = {  # nome -> base_url delle API compatibili OpenAI
     "groq": "https://api.groq.com/openai/v1",
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",

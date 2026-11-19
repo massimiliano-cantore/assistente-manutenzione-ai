@@ -47,23 +47,24 @@ The LLM is any OpenAI-compatible endpoint (default: Groq free tier), with fallba
 
 ## Run it
 
+**In the browser, nothing to install (GitHub Codespaces):** add `GROQ_API_KEY` under
+*GitHub → Settings → Codespaces → Secrets* (free key at console.groq.com), then on this repo
+*Code → Codespaces → Create codespace*. When the setup finishes, run `./avvia.sh` in the terminal and open port 8000.
+
+**On your computer** (Python 3.11+, Node 22, Git):
+
 ```bash
-# Python 3.11+
+git clone https://github.com/massimiliano-cantore/assistente-manutenzione-ai
+cd assistente-manutenzione-ai
+python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
-cp .env.example .env              # add GROQ_API_KEY (free key at console.groq.com)
-
-pytest -q                          # 16 tests, no key and no network needed
-EMBEDDER=tfidf python -m valutazioni.valuta_rag     # retrieval evaluation
-
-uvicorn app.api:crea_app --factory --port 8000      # API + agent (CMMS runs in-process)
-cd frontend && npm ci && npm run dev                 # UI on http://localhost:5173
+cp .env.example .env                                    # then put your GROQ_API_KEY in .env
+./avvia.sh                                              # Windows: see GUIDA.md
 ```
 
-Full stack with Docker (Qdrant server, CMMS as a separate service, Prometheus):
+Tests and evaluations: `pytest -q` (no key needed) · `python -m valutazioni.valuta_rag` · `python -m valutazioni.valuta_agente`.
 
-```bash
-docker compose up --build          # UI + API on http://localhost:8000, CMMS docs on :8001/docs
-```
+Full stack with Docker (Qdrant server, CMMS as a separate service, Prometheus): `docker compose up --build`.
 
 ## Evaluation
 

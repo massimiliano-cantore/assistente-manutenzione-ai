@@ -12,7 +12,32 @@
    Il numero che esce (es. 11/12) va nel README e nel CV.
 4. **Cloud.** Segui [`deploy/cloud-run.md`](deploy/cloud-run.md) (circa 20 minuti), poi lancia il workflow di deploy.
    Ottieni un URL pubblico da mettere su CV e LinkedIn.
-5. **In locale:** `docker compose up --build`, oppure i comandi Python del README.
+5. **Farlo girare:** vedi la sezione 1b qui sotto.
+
+## 1b. Come farlo girare
+
+**Senza installare nulla, nel browser (GitHub Codespaces) — consigliato**
+1. Su GitHub, in alto a destra: foto profilo → *Settings* → *Codespaces* → *New secret*. Nome `GROQ_API_KEY`, valore la tua chiave Groq, e come repository scegli `assistente-manutenzione-ai`.
+2. Apri il repository → pulsante verde *Code* → scheda *Codespaces* → *Create codespace on main*.
+3. Si apre VS Code nel browser e installa tutto da solo (3-5 minuti la prima volta).
+4. Nel terminale in basso scrivi `./avvia.sh`. Quando compare "Application startup complete", si apre la scheda con l'interfaccia (porta 8000). Se non si apre: scheda *Porte* → 8000 → icona del globo.
+5. Quando hai finito, chiudi la scheda: il codespace si ferma da solo dopo 30 minuti di inattività. Il piano gratuito ha una quota mensile di ore.
+
+**Sul tuo PC (Windows)**
+Servono Python 3.11 o superiore, Node 22 e Git. In PowerShell:
+```
+git clone https://github.com/massimiliano-cantore/assistente-manutenzione-ai
+cd assistente-manutenzione-ai
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements-dev.txt
+copy .env.example .env        (poi apri .env con il Blocco note e incolla la chiave dopo GROQ_API_KEY=)
+cd frontend; npm ci; npm run build; cd ..
+uvicorn app.api:crea_app --factory --port 8000
+```
+Poi apri http://localhost:8000. La prima volta scarica il modello di embedding (circa 220 MB).
+
+**Con Docker:** `docker compose up --build` avvia anche Qdrant come server separato, il CMMS come servizio a parte e Prometheus su http://localhost:9090.
 
 ## 2. Dove trovare ogni requisito dell'annuncio
 
