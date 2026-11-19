@@ -6,6 +6,8 @@ searches the service manuals (RAG), looks up similar past repairs, queries the r
 with the **CMMS** (maintenance management system): installed sites, spare-parts stock, work orders.
 Any write to the CMMS stops and waits for **human approval**.
 
+**▶ Live demo: [kyros-assistente-tecnico.streamlit.app](https://kyros-assistente-tecnico.streamlit.app/)** — 10 questions per visitor, each visitor gets their own CMMS. If the app is asleep, click to wake it up (about a minute).
+
 It is the production-oriented follow-up of
 [document-ai-schede-riparazione](https://github.com/massimiliano-cantore/document-ai-schede-riparazione):
 same synthetic company and archive (~7,400 repairs), from digitized repair sheets to an assistant that uses them.

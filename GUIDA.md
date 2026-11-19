@@ -16,6 +16,8 @@
 
 ## 1b. Come farlo girare
 
+**Demo pubblica:** https://kyros-assistente-tecnico.streamlit.app (codice in `demo/streamlit_app.py`, chiave Groq nei Secrets dell'app su share.streamlit.io). Ogni visitatore ha 10 domande e il suo CMMS separato; in totale al massimo 300 domande al giorno. Se cambi il codice su GitHub, Streamlit aggiorna la demo da solo.
+
 **Senza installare nulla, nel browser (GitHub Codespaces) — consigliato**
 1. Su GitHub, in alto a destra: foto profilo → *Settings* → *Codespaces* → *New secret*. Nome `GROQ_API_KEY`, valore la tua chiave Groq, e come repository scegli `assistente-manutenzione-ai`.
 2. Apri il repository → pulsante verde *Code* → scheda *Codespaces* → *Create codespace on main*.
