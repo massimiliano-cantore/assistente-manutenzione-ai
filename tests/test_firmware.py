@@ -51,3 +51,8 @@ def test_famiglia_e_compatibilita(tmp_path: Path):
     g.write_text("")
     assert fw.associa(g, {"OPR037": [("U3", "STM32G031")], "OPR039": [("U5", "STM32G431")]}, tmp_path,
                       {"OPR037": {"01180"}, "OPR039": {"01194"}}, "STM32") == "OPR037"
+
+
+def test_pic_senza_prefisso():
+    s = Scheda(codice="X", componenti={"U1": Componente("U1", valore="16F628A")})
+    assert fw.mcu_della_scheda(s) == [("U1", "PIC16F628A")]

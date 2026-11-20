@@ -16,7 +16,7 @@ CARTELLE_PROGETTO = {"nbproject": "MPLAB X"}
 # famiglie di microcontrollori riconoscibili dal valore o dalla descrizione del componente
 MCU = re.compile(r"(?i)\b(STM32[A-Z]\d{2,3}\w*|STM8\w+|PIC\d{2}[A-Z]{1,2}\d+\w*|dsPIC\w+|AT(?:mega|tiny|xmega)\w+|"
                  r"ATSAM\w+|SAM[DLE]\d\w+|MSP430\w+|nRF5\d\w+|ESP32\w*|ESP8266\w*|LPC\d{3,4}\w*|MK[LEV]?\d\w+|"
-                 r"EFM32\w+|EFR32\w+|R5F\w+|CC\d{4}\w*|AVR\w+|RP2040)\b")
+                 r"EFM32\w+|EFR32\w+|R5F\w+|CC\d{4}\w*|AVR\w+|RP2040|1[268]L?F\d{2,5}[A-Z]?)\b")
 
 
 def tipo(f: Path) -> tuple[str, str] | None:
@@ -123,7 +123,8 @@ def mcu_della_scheda(scheda) -> list[tuple[str, str]]:
     for d, c in scheda.componenti.items():
         m = MCU.search(" ".join([c.valore, c.codice_produttore, c.descrizione]))
         if m:
-            out.append((d, m.group(1).upper()))
+            codice = m.group(1).upper()
+            out.append((d, "PIC" + codice if codice[:2] in ("12", "16", "18") else codice))
     return out
 
 
