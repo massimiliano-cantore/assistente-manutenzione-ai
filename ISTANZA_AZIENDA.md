@@ -11,6 +11,19 @@ Lo stesso codice funziona in due modi:
 
 ## 1. La cartella dei documenti
 
+**Con molti prodotti, una sottocartella per prodotto:** non scrivere prodotti.yaml a mano, generalo:
+
+```
+python -m scripts.scansiona_documenti C:\percorso\produzione1
+```
+
+Lo script (gira tutto in locale) trova i PDF Altium e le BOM in ogni sottocartella, unisce schema e montaggio
+della stessa scheda, propone i collegamenti tra le schede (connettori che portano segnali con lo stesso nome sugli
+stessi pin) e scrive `prodotti.yaml` più un rapporto `scansione.txt` con quello che manca. Controlla i
+collegamenti proposti: sono suggerimenti.
+
+**Con pochi documenti** puoi anche scriverlo a mano:
+
 ```
 documentazione-azienda/          <- MAI dentro il repository, MAI su GitHub
 ├── prodotti.yaml                <- descrive schede, file e collegamenti

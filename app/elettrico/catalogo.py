@@ -56,6 +56,8 @@ class Catalogo:
         for p in conf.get("prodotti", []):
             coll = []
             for c in p.get("collegamenti", []):
+                if "?" in c["da"] + c["a"]:      # bozza non completata
+                    continue
                 sa, ca = c["da"].split(".", 1)
                 sb, cb = c["a"].split(".", 1)
                 coll.append(Collegamento(sa, ca, sb, cb, {str(k): str(v) for k, v in (c.get("mappa") or {}).items()}))
