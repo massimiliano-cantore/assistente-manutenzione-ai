@@ -115,7 +115,14 @@ def unisci(scheda: Scheda, componenti: list[Componente]) -> list[str]:
                 setattr(esistente, campo, getattr(c, campo))
         esistente.montato = c.montato
     nella_bom = {c.designator for c in componenti}
-    mancanti = sorted(d for d in scheda.componenti if d not in nella_bom and not re.match(r"^(TP|FID|LOGO|MH|H)\d*", d))
+    def da_segnalare(d: str) -> bool:
+        if d in nella_bom or re.match(r"^(TP|FID|LOGO|MH|H|PCB)\d*", d):
+            return False
+        if not re.fullmatch(r"[A-Z]+\d+[A-Z]?", d):      # +3V3, MISO, GND_1: etichette di net, non componenti
+            return False
+        base = re.sub(r"(?<=\d)[A-Z]$", "", d)               # U5A, U5B: parti dello stesso integrato U5
+        return base == d or base not in nella_bom
+    mancanti = sorted(d for d in scheda.componenti if da_segnalare(d))
     if mancanti:
         avvisi.append(f"sulla scheda ma non nella BOM: {', '.join(mancanti)}")
     return avvisi

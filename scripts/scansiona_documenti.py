@@ -83,7 +83,7 @@ def suggerisci_collegamenti(schede: dict) -> list[dict]:
                 for cb, pb in con[b].items():
                     uguali = sum(1 for p in pa if p in pb and (pa[p] == pb[p] or pa[p] in pb[p] or pb[p] in pa[p]))
                     quota = uguali / max(min(len(pa), len(pb)), 1)
-                    if uguali >= 4 or (uguali >= 3 and quota >= 0.6):
+                    if uguali >= 4:
                         if not migliore or (uguali, quota) > (migliore[0], migliore[3]):
                             migliore = (uguali, ca, cb, quota)
             if migliore:
