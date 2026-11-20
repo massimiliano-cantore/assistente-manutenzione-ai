@@ -14,6 +14,7 @@ from pathlib import Path
 import yaml
 
 from app.elettrico import altium_pdf, bom
+from app.firmware import inventario as fw
 
 ESTENSIONI_BOM = {".xls", ".xlsx", ".csv"}
 
@@ -113,12 +114,62 @@ def _associa_bom(bom_file: list[Path], insiemi: dict[str, set[str]]) -> tuple[di
     return per_scheda, orfane
 
 
+def _inventario_firmware(file: list[Path], mcu: dict, radice: Path, rapporto: list[str], tot) -> dict:
+    """Riassume il firmware di un prodotto nel rapporto e restituisce la voce 'firmware' per prodotti.yaml."""
+    if not file:
+        return {}
+    tot["fw_prodotti"] += 1
+    rel = lambda f: str(f.relative_to(radice)).replace("\\", "/")   # noqa: E731
+    binari, sorgenti, progetti = [], defaultdict(list), []
+    for f in file:
+        t = fw.tipo(f) or ("progetto", fw.CARTELLE_PROGETTO[f.name.lower()])
+        if t[0] == "binario":
+            binari.append((f, t[1]))
+        elif t[0] == "sorgente":
+            sorgenti[f.parent].append((f, t[1]))
+        else:
+            progetti.append((f, t[1]))
+    voce = {"binari": [], "sorgenti": [], "progetti": []}
+    rapporto.append(f"  firmware: {len(binari)} binari, {sum(map(len, sorgenti.values()))} sorgenti, "
+                    f"{len(progetti)} progetti")
+    for f, formato in binari:
+        b = {"file": rel(f), "formato": formato, "scheda": fw.associa(f, mcu, radice)}
+        riga = f"    {formato.upper()} {f.name} ({f.stat().st_size // 1024} KB)"
+        if formato == "hex":
+            try:
+                i = fw.info_hex(f)
+                b.update({k: v for k, v in i.items() if v})
+                riga += f": {i['byte']} byte in {', '.join(i['intervalli'])}" + ("..." if i["piu_intervalli"] else "")
+                riga += f" | {i['famiglia_probabile']}" if i["famiglia_probabile"] else ""
+                riga += f" | {i['errori_checksum']} righe con checksum errato" if i["errori_checksum"] else ""
+            except Exception as e:
+                riga += f": non leggibile ({e})"
+        riga += f" -> scheda {b['scheda']}" if b["scheda"] else " -> scheda non riconosciuta"
+        rapporto.append(riga)
+        voce["binari"].append(b)
+        tot["fw_binari"] += 1
+    for cartella, fs in sorted(sorgenti.items()):
+        linguaggi = sorted({t for _, t in fs})
+        scheda = fw.associa(fs[0][0], mcu, radice)
+        rapporto.append(f"    sorgenti in {rel(cartella)}: {len(fs)} file ({', '.join(linguaggi)})"
+                        + (f" -> scheda {scheda}" if scheda else ""))
+        voce["sorgenti"].append({"cartella": rel(cartella), "file": len(fs), "linguaggi": linguaggi, "scheda": scheda})
+        tot["fw_sorgenti"] += len(fs)
+    for f, ide in progetti:
+        rapporto.append(f"    progetto {ide}: {rel(f)}")
+        voce["progetti"].append({"file": rel(f), "ambiente": ide})
+        tot["fw_progetti"] += 1
+    return {"firmware": {k: v for k, v in voce.items() if v}}
+
+
 def scansiona(radice: Path) -> tuple[dict, list[str]]:
     rapporto, schede, prodotti, usati = [], [], [], {}
     tot = defaultdict(int)
     for cartella in sorted(p for p in radice.iterdir() if p.is_dir()):
-        pdf_altium, pdf_altri, bom_file = [], [], []
+        pdf_altium, pdf_altri, bom_file, firmware = [], [], [], []
         for f in sorted(cartella.rglob("*")):
+            if f.is_dir() and f.name.lower() in fw.CARTELLE_PROGETTO:
+                firmware.append(f)
             if not f.is_file():
                 continue
             if f.suffix.lower() == ".pdf":
@@ -126,9 +177,11 @@ def scansiona(radice: Path) -> tuple[dict, list[str]]:
                     (pdf_altium if altium_pdf.e_pdf_altium(f) else pdf_altri).append(f)
                 except Exception:
                     pdf_altri.append(f)
+            elif fw.tipo(f):
+                firmware.append(f)
             elif f.suffix.lower() in ESTENSIONI_BOM and "bom" in f.name.lower():
                 bom_file.append(f)
-        if not pdf_altium and not bom_file:
+        if not pdf_altium and not bom_file and not firmware:
             continue
         tot["prodotti"] += 1
         rapporto.append(f"\n== {cartella.name}: {len(pdf_altium)} PDF Altium, {len(bom_file)} BOM, "
@@ -137,6 +190,8 @@ def scansiona(radice: Path) -> tuple[dict, list[str]]:
             tot["senza_netlist"] += 1
             rapporto.append("  nessun PDF con netlist (PDF non esportati da Altium o senza segnalibri): "
                             "per ora solo ricerca nei documenti")
+            voce_fw = _inventario_firmware(firmware, {}, radice, rapporto, tot)
+            prodotti.append({"nome": cartella.name, "schede": [], "collegamenti": [], **voce_fw})
             continue
         per_scheda = defaultdict(dict)
         for f in pdf_altium:
@@ -197,9 +252,16 @@ def scansiona(radice: Path) -> tuple[dict, list[str]]:
             rapporto.append(f"  collegamento {c['da']} <-> {c['a']} ({c['nota']})")
         if len(codici) > 1 and not coll:
             rapporto.append("  nessun collegamento riconosciuto tra le schede: aggiungilo a mano")
-        prodotti.append({"nome": cartella.name, "schede": codici, "collegamenti": coll})
+        mcu = {c: fw.mcu_della_scheda(s) for c, s in caricate.items()}
+        for c, m in mcu.items():
+            if m:
+                rapporto.append(f"  microcontrollore su {c}: " + ", ".join(f"{d} {v}" for d, v in m))
+        voce_fw = _inventario_firmware(firmware, mcu, radice, rapporto, tot)
+        prodotti.append({"nome": cartella.name, "schede": codici, "collegamenti": coll, **voce_fw})
     rapporto.insert(0, f"RIEPILOGO: {tot['prodotti']} prodotti, {tot['schede']} schede con netlist "
-                       f"({tot['con_bom']} con BOM), {tot['senza_netlist']} prodotti senza PDF con netlist")
+                       f"({tot['con_bom']} con BOM), {tot['senza_netlist']} prodotti senza PDF con netlist; "
+                       f"firmware: {tot['fw_binari']} binari, {tot['fw_sorgenti']} file sorgente, "
+                       f"{tot['fw_progetti']} progetti, in {tot['fw_prodotti']} prodotti")
     return {"schede": schede, "prodotti": prodotti}, rapporto
 
 
