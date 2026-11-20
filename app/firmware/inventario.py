@@ -65,25 +65,56 @@ def info_hex(f: Path) -> dict:
         else:
             uniti.append([a, b])
     return {"byte": totale, "intervalli": [f"0x{a:08X}-0x{b - 1:08X}" for a, b in uniti[:6]],
-            "piu_intervalli": len(uniti) > 6, "errori_checksum": errori, "famiglia_probabile": _famiglia(uniti)}
+            "piu_intervalli": len(uniti) > 6, "errori_checksum": errori, "famiglia_probabile": _famiglia(uniti),
+            "famiglia": famiglia_hex(uniti)}
+
+
+def _sovrappone(intervalli: list, da: int, a: int) -> bool:
+    return any(x <= a and y > da for x, y in intervalli)
+
+
+def famiglia_hex(intervalli: list) -> str:
+    """Famiglia probabile dagli indirizzi: 'STM32', 'PIC18', 'PIC16', 'PIC32', 'AVR/altro' o ''."""
+    if not intervalli:
+        return ""
+    if 0x08000000 <= intervalli[0][0] < 0x08200000:
+        return "STM32"
+    if _sovrappone(intervalli, 0x300000, 0x30000F) or _sovrappone(intervalli, 0xF00000, 0xF003FF):
+        return "PIC18"
+    if _sovrappone(intervalli, 0x1FC00000, 0x1FC02FFF) or _sovrappone(intervalli, 0x1D000000, 0x1D1FFFFF):
+        return "PIC32"
+    if _sovrappone(intervalli, 0x400E, 0x4011) or _sovrappone(intervalli, 0x4200, 0x43FF):
+        return "PIC16"          # configurazione a 0x2007 (byte 0x400E) ed EEPROM a 0x2100 (byte 0x4200)
+    if intervalli[0][0] == 0 and intervalli[-1][1] <= 0x40000:
+        return "AVR/altro"
+    return ""
+
+
+SPIEGAZIONE = {"STM32": "probabile STM32 (flash a 0x08000000)",
+               "PIC18": "probabile PIC18 (configurazione a 0x300000 / EEPROM a 0xF00000)",
+               "PIC16": "probabile PIC16/PIC12 (configurazione a 0x400E / EEPROM a 0x4200)",
+               "PIC32": "probabile PIC32",
+               "AVR/altro": "parte da 0: AVR, 8051, MSP430 o ARM senza offset (da verificare con lo schema)"}
 
 
 def _famiglia(intervalli: list) -> str:
-    """Indizio dall'indirizzo di partenza: è solo un suggerimento."""
-    if not intervalli:
-        return ""
-    a = intervalli[0][0]
-    if 0x08000000 <= a < 0x08200000:
-        return "probabile STM32 (flash a 0x08000000)"
-    if any(0x300000 <= x < 0x300010 for x, _ in intervalli):
-        return "probabile PIC18 (bit di configurazione a 0x300000)"
-    if any(0x400E <= x <= 0x4010 for x, _ in intervalli) or any(0x2007 <= x <= 0x2008 for x, _ in intervalli):
-        return "probabile PIC16/PIC12 (configurazione)"
-    if any(0x1FC00000 <= x < 0x1FC03000 or 0x1D000000 <= x < 0x1D200000 for x, _ in intervalli):
-        return "probabile PIC32"
-    if a == 0 and intervalli[-1][1] <= 0x40000:
-        return "parte da 0 (AVR, PIC, 8051, MSP430 o ARM senza offset: da verificare con lo schema)"
+    return SPIEGAZIONE.get(famiglia_hex(intervalli), "")
+
+
+def famiglia_mcu(codice: str) -> str:
+    c = codice.upper()
+    for pref, fam in (("STM32", "STM32"), ("PIC18", "PIC18"), ("PIC16", "PIC16"), ("PIC12", "PIC16"),
+                      ("PIC32", "PIC32"), ("ATMEGA", "AVR/altro"), ("ATTINY", "AVR/altro"), ("ATXMEGA", "AVR/altro"),
+                      ("MSP430", "AVR/altro")):
+        if c.startswith(pref):
+            return fam
     return ""
+
+
+def compatibile(fam_hex: str, mcu: list[tuple[str, str]]) -> bool:
+    """Un .hex può appartenere alla scheda? Se non sappiamo, sì."""
+    fam = {famiglia_mcu(m) for _, m in mcu} - {""}
+    return not fam_hex or not fam or fam_hex in fam
 
 
 def mcu_della_scheda(scheda) -> list[tuple[str, str]]:
@@ -96,12 +127,20 @@ def mcu_della_scheda(scheda) -> list[tuple[str, str]]:
     return out
 
 
-def associa(f: Path, schede: dict[str, list[str]], radice: Path) -> str | None:
-    """Scheda a cui appartiene il file: codice della scheda nel percorso, altrimenti unica scheda con MCU."""
+def associa(f: Path, schede: dict[str, list], radice: Path, alias: dict[str, set[str]] | None = None,
+            fam_hex: str = "") -> str | None:
+    """Scheda a cui appartiene il file: codice della scheda (o un suo alias, es. il numero di circuito '01180' preso
+    dal nome della BOM) nel percorso; altrimenti l'unica scheda con un microcontrollore compatibile."""
     testo = str(f.relative_to(radice)).upper()
-    for codice in sorted(schede, key=len, reverse=True):
-        nome = codice.split("_", 1)[-1].upper() if "_" in codice else codice.upper()
-        if len(nome) >= 4 and (codice.upper() in testo or nome in testo):
+    alias = alias or {}
+    candidati = []
+    for codice in schede:
+        nomi = {codice.upper(), codice.split("_", 1)[-1].upper()} | {a.upper() for a in alias.get(codice, ())}
+        for nome in nomi:
+            if len(nome) >= 4 and re.search(rf"(?<![A-Z0-9]){re.escape(nome)}(?![0-9])", testo):
+                candidati.append((len(nome), codice))
+    for _, codice in sorted(candidati, reverse=True):
+        if compatibile(fam_hex, schede[codice]):
             return codice
-    con_mcu = [c for c, m in schede.items() if m]
+    con_mcu = [c for c, m in schede.items() if m and compatibile(fam_hex, m)]
     return con_mcu[0] if len(con_mcu) == 1 else None

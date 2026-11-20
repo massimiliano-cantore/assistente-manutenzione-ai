@@ -36,3 +36,18 @@ def test_associa(tmp_path: Path):
     g = tmp_path / "firmware" / "release.hex"
     g.write_text("")
     assert fw.associa(g, {"MADRE": [], "RADIO": [("U1", "NRF52832")]}, tmp_path) == "RADIO"
+
+
+def test_famiglia_e_compatibilita(tmp_path: Path):
+    assert fw.famiglia_hex([[0, 0xB70], [0x400E, 0x4010]]) == "PIC16"
+    assert fw.famiglia_hex([[0, 0x1000], [0x4000, 0x4010], [0x4200, 0x4300]]) == "PIC16"
+    assert fw.famiglia_hex([[0, 0x2000], [0x300000, 0x30000E]]) == "PIC18"
+    assert fw.famiglia_hex([[0, 0x2400]]) == "AVR/altro"
+    f = tmp_path / "FIRM_SP085.hex"
+    f.write_text("")
+    # un .hex PIC non va assegnato all'unica scheda con STM32
+    assert fw.associa(f, {"MAIN": [("U1", "STM32G031G8U6")]}, tmp_path, fam_hex="PIC16") is None
+    g = tmp_path / "01180_v01_02_00.hex"
+    g.write_text("")
+    assert fw.associa(g, {"OPR037": [("U3", "STM32G031")], "OPR039": [("U5", "STM32G431")]}, tmp_path,
+                      {"OPR037": {"01180"}, "OPR039": {"01194"}}, "STM32") == "OPR037"

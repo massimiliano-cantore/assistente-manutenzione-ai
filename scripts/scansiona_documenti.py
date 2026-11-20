@@ -114,7 +114,8 @@ def _associa_bom(bom_file: list[Path], insiemi: dict[str, set[str]]) -> tuple[di
     return per_scheda, orfane
 
 
-def _inventario_firmware(file: list[Path], mcu: dict, radice: Path, rapporto: list[str], tot) -> dict:
+def _inventario_firmware(file: list[Path], mcu: dict, radice: Path, rapporto: list[str], tot,
+                         alias: dict | None = None) -> dict:
     """Riassume il firmware di un prodotto nel rapporto e restituisce la voce 'firmware' per prodotti.yaml."""
     if not file:
         return {}
@@ -132,25 +133,39 @@ def _inventario_firmware(file: list[Path], mcu: dict, radice: Path, rapporto: li
     voce = {"binari": [], "sorgenti": [], "progetti": []}
     rapporto.append(f"  firmware: {len(binari)} binari, {sum(map(len, sorgenti.values()))} sorgenti, "
                     f"{len(progetti)} progetti")
+    import hashlib
+    visti = {}
     for f, formato in binari:
-        b = {"file": rel(f), "formato": formato, "scheda": fw.associa(f, mcu, radice)}
+        impronta = hashlib.sha1(f.read_bytes()).hexdigest()[:12]
+        if impronta in visti:
+            rapporto.append(f"    copia identica di {visti[impronta]}: {rel(f)}")
+            continue
+        visti[impronta] = f.name
+        b = {"file": rel(f), "formato": formato, "sha1": impronta}
         riga = f"    {formato.upper()} {f.name} ({f.stat().st_size // 1024} KB)"
+        fam = ""
         if formato == "hex":
             try:
                 i = fw.info_hex(f)
+                fam = i["famiglia"]
                 b.update({k: v for k, v in i.items() if v})
-                riga += f": {i['byte']} byte in {', '.join(i['intervalli'])}" + ("..." if i["piu_intervalli"] else "")
+                if not i["byte"]:
+                    riga += ": nessun dato di programma (file vuoto, parametri o formato diverso da Intel HEX)"
+                else:
+                    altri = "..." if i["piu_intervalli"] else ""
+                    riga += f": {i['byte']} byte in {', '.join(i['intervalli'])}{altri}"
                 riga += f" | {i['famiglia_probabile']}" if i["famiglia_probabile"] else ""
                 riga += f" | {i['errori_checksum']} righe con checksum errato" if i["errori_checksum"] else ""
             except Exception as e:
                 riga += f": non leggibile ({e})"
+        b["scheda"] = fw.associa(f, mcu, radice, alias, fam)
         riga += f" -> scheda {b['scheda']}" if b["scheda"] else " -> scheda non riconosciuta"
         rapporto.append(riga)
         voce["binari"].append(b)
         tot["fw_binari"] += 1
     for cartella, fs in sorted(sorgenti.items()):
         linguaggi = sorted({t for _, t in fs})
-        scheda = fw.associa(fs[0][0], mcu, radice)
+        scheda = fw.associa(fs[0][0], mcu, radice, alias)
         rapporto.append(f"    sorgenti in {rel(cartella)}: {len(fs)} file ({', '.join(linguaggi)})"
                         + (f" -> scheda {scheda}" if scheda else ""))
         voce["sorgenti"].append({"cartella": rel(cartella), "file": len(fs), "linguaggi": linguaggi, "scheda": scheda})
@@ -256,7 +271,14 @@ def scansiona(radice: Path) -> tuple[dict, list[str]]:
         for c, m in mcu.items():
             if m:
                 rapporto.append(f"  microcontrollore su {c}: " + ", ".join(f"{d} {v}" for d, v in m))
-        voce_fw = _inventario_firmware(firmware, mcu, radice, rapporto, tot)
+        alias = defaultdict(set)
+        for v in schede:
+            if v["codice"] in caricate:
+                for campo in ("bom", "netlist", "disegno"):
+                    for f in [v.get(campo)] + (v.get("varianti_bom", []) if campo == "bom" else []):
+                        if f:
+                            alias[v["codice"]] |= set(re.findall(r"(?<!\d)(\d{5})E\d{2}", Path(f).name))
+        voce_fw = _inventario_firmware(firmware, mcu, radice, rapporto, tot, alias)
         prodotti.append({"nome": cartella.name, "schede": codici, "collegamenti": coll, **voce_fw})
     rapporto.insert(0, f"RIEPILOGO: {tot['prodotti']} prodotti, {tot['schede']} schede con netlist "
                        f"({tot['con_bom']} con BOM), {tot['senza_netlist']} prodotti senza PDF con netlist; "
