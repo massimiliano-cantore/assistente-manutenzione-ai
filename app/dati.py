@@ -95,9 +95,32 @@ class ArchivioResi:
         return profili
 
 
-def sezioni_manuali(cartella: Path) -> list[dict]:
-    """Chunking dei manuali per sezione '## ': ogni sezione è un documento con titolo e famiglia."""
+def sezioni_pdf(f: Path, caratteri: int = 1500) -> list[dict]:
+    """Manuali e istruzioni in PDF: un documento per pagina (spezzato se troppo lungo), citabile come 'file#p3'."""
+    import pypdfium2 as pdfium
+
     out = []
+    doc = pdfium.PdfDocument(str(f))
+    try:
+        for n, pagina in enumerate(doc, 1):
+            testo = re.sub(r"[ \t]+", " ", pagina.get_textpage().get_text_range()).strip()
+            for k in range(0, len(testo), caratteri):
+                pezzo = testo[k:k + caratteri]
+                if len(pezzo) > 80:
+                    out.append({"id": f"{f.stem}#p{n}" + (f"-{k // caratteri + 1}" if k else ""), "manuale": f.stem,
+                                "famiglia": "generale", "titolo": f"{f.stem}, pagina {n}", "testo": pezzo})
+    finally:
+        doc.close()
+    return out
+
+
+def sezioni_manuali(cartella: Path) -> list[dict]:
+    """Chunking dei manuali: i Markdown per sezione '## ', i PDF per pagina."""
+    out = []
+    if not cartella.exists():
+        return out
+    for f in sorted(cartella.glob("*.pdf")) + sorted(cartella.glob("*.PDF")):
+        out += sezioni_pdf(f)
     for f in sorted(cartella.glob("*.md")):
         testo = f.read_text(encoding="utf-8")
         intestazione = re.search(r"^#\s+(.+)$", testo, re.M)

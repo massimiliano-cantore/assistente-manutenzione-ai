@@ -7,3 +7,9 @@ frontend/dist/
 valutazioni/report/
 indice/
 modelli/
+output/
+# documentazione aziendale: mai nel repository
+azienda/
+dati_azienda/
+*.SchDoc
+*.PcbDoc

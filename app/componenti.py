@@ -1,11 +1,17 @@
-"""Assemblaggio dei componenti, condiviso da API, script di valutazione e test."""
+"""Assemblaggio dei componenti, condiviso da API, script di valutazione e test.
+
+Due modalità, stesso codice:
+- demo:    azienda fittizia KYROS (archivio resi sintetico, manuali di esempio, CMMS finto);
+- azienda: documentazione reale nella cartella DATI_AZIENDA (schede, BOM, istruzioni), che non sta nel repository.
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app.agente.grafo import crea_grafo, crea_llm
 from app.agente.servizio import Assistente
 from app.agente.strumenti import crea_strumenti
+from app.agente.strumenti_elettrici import crea_strumenti_elettrici
 from app.cmms.api import crea_app as crea_app_cmms
 from app.cmms.client import ClienteCMMS
 from app.cmms.store import CMMSStore
@@ -17,26 +23,55 @@ from app.rag.indice import KnowledgeBase
 @dataclass
 class Componenti:
     cfg: Config
-    archivio: ArchivioResi
+    archivio: ArchivioResi | None
     kb: KnowledgeBase
-    cmms: ClienteCMMS
+    cmms: ClienteCMMS | None
     strumenti: list
     assistente: Assistente | None
+    catalogo: object | None = None
+    datasheet: object | None = None
+    extra: dict = field(default_factory=dict)
+
+
+def _componenti_azienda(cfg: Config, llm, kb, catalogo, datasheet) -> Componenti:
+    from app.datasheet.servizio import ServizioDatasheet, estrattore_llm
+    from app.elettrico.catalogo import Catalogo
+
+    catalogo = catalogo or Catalogo.carica(cfg.dati_azienda)
+    kb = kb or KnowledgeBase(cfg, None, cartella_manuali=cfg.dati_azienda / "documenti")
+    if datasheet is None:
+        try:
+            datasheet = ServizioDatasheet(cfg.dati_azienda / "datasheet")
+        except Exception:
+            datasheet = None
+    strumenti = crea_strumenti_elettrici(catalogo, datasheet, cfg.cartella_immagini)
+    if kb.sezioni:   # istruzioni e manuali dell'azienda, se presenti nella cartella documenti/
+        strumenti = [s for s in crea_strumenti(None, kb, None) if s.name == "cerca_manuale"] + strumenti
+    return Componenti(cfg, None, kb, None, strumenti, None, catalogo, datasheet,
+                      {"estrattore": estrattore_llm})
 
 
 def costruisci(cfg: Config | None = None, llm=None, con_agente: bool = True, kb: KnowledgeBase | None = None,
-               archivio: ArchivioResi | None = None) -> Componenti:
+               archivio: ArchivioResi | None = None, catalogo=None, datasheet=None) -> Componenti:
     cfg = cfg or carica_config()
-    archivio = archivio or ArchivioResi(cfg.db_resi)
-    kb = kb or KnowledgeBase(cfg, archivio)
-    if cfg.cmms_url:
-        cmms = ClienteCMMS(base_url=cfg.cmms_url)
-    else:  # CMMS in-process: stessa API HTTP, senza un servizio separato
-        cmms = ClienteCMMS(app=crea_app_cmms(CMMSStore(cfg.db_resi, cfg.db_cmms)))
-    strumenti = crea_strumenti(archivio, kb, cmms)
-    assistente = None
+    if cfg.modalita == "azienda":
+        c = _componenti_azienda(cfg, llm, kb, catalogo, datasheet)
+    else:
+        archivio = archivio or ArchivioResi(cfg.db_resi)
+        kb = kb or KnowledgeBase(cfg, archivio)
+        if cfg.cmms_url:
+            cmms = ClienteCMMS(base_url=cfg.cmms_url)
+        else:  # CMMS in-process: stessa API HTTP, senza un servizio separato
+            cmms = ClienteCMMS(app=crea_app_cmms(CMMSStore(cfg.db_resi, cfg.db_cmms)))
+        c = Componenti(cfg, archivio, kb, cmms, crea_strumenti(archivio, kb, cmms), None)
     if con_agente:
-        llm = llm or crea_llm(cfg, strumenti)
-        grafo = crea_grafo(llm, strumenti, cfg.prompt_sistema())
-        assistente = Assistente(grafo, cfg.max_passi, cfg.firma())
-    return Componenti(cfg, archivio, kb, cmms, strumenti, assistente)
+        llm = llm or crea_llm(cfg, c.strumenti)
+        if c.datasheet is not None and c.datasheet.estrattore is None and "estrattore" in c.extra:
+            try:   # la piedinatura si estrae con lo stesso modello (senza strumenti collegati)
+                from app.agente.grafo import crea_llm_semplice
+                c.datasheet.estrattore = c.extra["estrattore"](crea_llm_semplice(cfg))
+            except Exception:
+                pass
+        grafo = crea_grafo(llm, c.strumenti, cfg.prompt_sistema())
+        c.assistente = Assistente(grafo, cfg.max_passi, cfg.firma())
+    return c

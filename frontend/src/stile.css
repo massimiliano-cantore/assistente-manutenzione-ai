@@ -42,3 +42,4 @@ button:disabled { opacity: .5; cursor: default; }
 button.secondario { background: #fff; color: var(--testo); border: 1px solid var(--bordo); }
 button.esempio { background: #fff; color: var(--testo); border: 1px solid var(--bordo); text-align: left; line-height: 1.35; }
 @media (max-width: 640px) { .esempi { grid-template-columns: 1fr; } header { flex-direction: column; align-items: flex-start; } }
+.disegno { display: block; max-width: 100%; margin: 8px 0; border: 1px solid var(--bordo); border-radius: 6px; }

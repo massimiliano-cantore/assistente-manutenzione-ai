@@ -31,6 +31,16 @@ def crea_llm(cfg, strumenti: list):
     return principale.with_fallbacks(riserve) if riserve else principale
 
 
+def crea_llm_semplice(cfg):
+    """Modello senza strumenti, per compiti di estrazione (es. la piedinatura da un datasheet)."""
+    from langchain_openai import ChatOpenAI
+
+    if not cfg.api_key:
+        raise RuntimeError("manca la chiave API")
+    return ChatOpenAI(model=cfg.modello, base_url=cfg.base_url, api_key=cfg.api_key, temperature=0,
+                      max_retries=2, timeout=120)
+
+
 def crea_grafo(llm: BaseChatModel, strumenti: list, prompt_sistema: str, checkpointer=None):
     def agente(stato: MessagesState):
         risposta = llm.invoke([SystemMessage(prompt_sistema)] + stato["messages"])

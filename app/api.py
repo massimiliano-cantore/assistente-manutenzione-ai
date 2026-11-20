@@ -8,11 +8,13 @@ GET  /metrics        metriche Prometheus
 """
 from __future__ import annotations
 
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
@@ -60,7 +62,17 @@ def crea_app(componenti: Componenti | None = None, frontend: Path | None = FRONT
     def salute():
         c: Componenti = app.state.c
         return {"stato": "ok", **c.cfg.firma(), "sezioni_manuali": len(c.kb.sezioni),
-                "profili_casi": len(c.kb.profili)}
+                "profili_casi": len(c.kb.profili), "schede": len(c.catalogo.schede) if c.catalogo else 0}
+
+    @app.get("/api/immagini/{nome}")
+    def immagine(nome: str):
+        """Disegni con i componenti evidenziati dall'agente."""
+        if not re.fullmatch(r"[a-f0-9]{12}\.png", nome):
+            raise HTTPException(404)
+        f = app.state.c.cfg.cartella_immagini / nome
+        if not f.exists():
+            raise HTTPException(404)
+        return FileResponse(f, media_type="image/png")
 
     @app.get("/metrics")
     def metriche():

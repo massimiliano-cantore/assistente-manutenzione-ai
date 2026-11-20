@@ -25,6 +25,7 @@ same synthetic company and archive (~7,400 repairs), from digitized repair sheet
 | Versioning | Prompt and model configuration versioned in `config/agente.yaml` + `prompts/`; every evaluation report records config + git commit |
 | Observability | Prometheus metrics (latency, tool calls/errors, tokens, approvals), structured JSON logs, optional **Langfuse** tracing |
 | Delivery | **Docker** multi-stage (index and embedding model baked at build time), `docker compose` stack, **GitHub Actions** CI/CD, **Google Cloud Run** deploy workflow, **Kubernetes** manifests |
+| Electronics documentation (company mode) | Netlist read from Altium PDF bookmarks, BOM import (xls/csv), product map with board-to-board connectors, signal path across boards and series parts, components highlighted on the drawing, datasheet lookup (Mouser API, web fallback, compatible parts) with pin table extraction checked against the netlist. See [ISTANZA_AZIENDA.md](ISTANZA_AZIENDA.md) |
 | Frontend | **TypeScript + React** chat: shows every agent step and the approval card for CMMS actions |
 
 ## Architecture

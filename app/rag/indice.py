@@ -24,10 +24,11 @@ MANUALI, CASI = "manuali", "casi"
 
 
 class KnowledgeBase:
-    def __init__(self, cfg: Config, archivio: ArchivioResi, embedder: Embedder | None = None):
+    def __init__(self, cfg: Config, archivio: ArchivioResi | None, embedder: Embedder | None = None,
+                 cartella_manuali: Path | None = None):
         self.cfg = cfg
-        self.sezioni = sezioni_manuali(cfg.cartella_manuali)
-        self.profili = archivio.profili_casi()
+        self.sezioni = sezioni_manuali(cartella_manuali or cfg.cartella_manuali)
+        self.profili = archivio.profili_casi() if archivio else []   # senza archivio: nessun caso simile
         self.embedder = embedder or crea_embedder(cfg.embedder, cfg.modello_embedding)
         if cfg.qdrant_url:
             self.client = QdrantClient(url=cfg.qdrant_url)
@@ -71,10 +72,14 @@ class KnowledgeBase:
             return False
 
     def costruisci(self) -> None:
-        self.embedder.adatta([d["testo"] for d in self.sezioni + self.profili])
+        testi = [d["testo"] for d in self.sezioni + self.profili]
+        if len(testi) >= 2:
+            self.embedder.adatta(testi)
         for nome, docs in ((MANUALI, self.sezioni), (CASI, self.profili)):
             if self.client.collection_exists(nome):
                 self.client.delete_collection(nome)
+            if not docs:            # es. azienda senza archivio storico: la collezione resta vuota
+                continue
             self.client.create_collection(nome, vectors_config=VectorParams(size=self.embedder.dim,
                                                                             distance=Distance.COSINE))
             vettori = self.embedder.documenti([d["testo"] for d in docs])
@@ -84,6 +89,8 @@ class KnowledgeBase:
 
     # --- ricerca ---------------------------------------------------------------------------------------
     def _cerca(self, collezione: str, testo: str, famiglia: str | None, k: int) -> list[dict]:
+        if not self.client.collection_exists(collezione):
+            return []
         filtro = None
         if famiglia:
             valori = [famiglia, "generale"] if collezione == MANUALI else [famiglia]

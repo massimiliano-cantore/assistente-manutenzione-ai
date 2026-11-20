@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { chiedi, conferma, salute, type AzioneProposta, type Passo, type Risposta, type Salute } from "./api";
-import { nomeStrumento, riassunto } from "./formato";
+import { immagini, nomeStrumento, riassunto } from "./formato";
 
 interface Messaggio {
   ruolo: "utente" | "assistente" | "sistema";
@@ -127,6 +127,9 @@ export default function App() {
         {messaggi.map((m, i) => (
           <div key={i} className={`msg ${m.ruolo}`}>
             {m.testo && <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.testo}</ReactMarkdown>}
+            {m.passi && immagini(m.passi).map((src) => (
+              <a key={src} href={src} target="_blank" rel="noreferrer"><img className="disegno" src={src} alt="Disegno con i componenti evidenziati" /></a>
+            ))}
             {m.passi && <Passi passi={m.passi} />}
             {m.secondi !== undefined && <div className="tempo">{m.secondi.toFixed(1)} s</div>}
           </div>

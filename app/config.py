@@ -32,6 +32,7 @@ PROVIDER = {  # nome -> base_url delle API compatibili OpenAI
     "groq": "https://api.groq.com/openai/v1",
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
     "openai": "https://api.openai.com/v1",
+    "ollama": "http://localhost:11434/v1",      # modelli in locale: i documenti non escono dall'azienda
 }
 
 
@@ -54,6 +55,8 @@ class Config:
     cartella_indice: str | None = None          # indice Qdrant su disco (costruito nell'immagine Docker)
     qdrant_url: str | None = None               # se impostato usa un server Qdrant (docker compose)
     cmms_url: str | None = None                 # se impostato l'agente chiama il CMMS via HTTP
+    dati_azienda: Path | None = None            # cartella della documentazione aziendale (MAI nel repository)
+    cartella_immagini: Path = RADICE / "output" / "immagini"
     extra: dict = field(default_factory=dict)
 
     @property
@@ -62,14 +65,28 @@ class Config:
 
     @property
     def api_key(self) -> str | None:
-        return os.getenv("LLM_API_KEY") or os.getenv(f"{self.provider.upper()}_API_KEY")
+        chiave = os.getenv("LLM_API_KEY") or os.getenv(f"{self.provider.upper()}_API_KEY")
+        return chiave or ("ollama" if self.provider == "ollama" else None)   # Ollama non chiede chiavi
+
+    @property
+    def modalita(self) -> str:
+        """'demo' = azienda fittizia KYROS; 'azienda' = documentazione reale nella cartella DATI_AZIENDA."""
+        return "azienda" if self.dati_azienda else "demo"
 
     def prompt_sistema(self) -> str:
-        return (RADICE / "prompts" / f"sistema_{self.versione_prompt}.md").read_text(encoding="utf-8")
+        nome = f"azienda_{self.versione_prompt_azienda}" if self.modalita == "azienda" else \
+            f"sistema_{self.versione_prompt}"
+        return (RADICE / "prompts" / f"{nome}.md").read_text(encoding="utf-8")
+
+    @property
+    def versione_prompt_azienda(self) -> str:
+        return os.getenv("VERSIONE_PROMPT_AZIENDA", "v1")
 
     def firma(self) -> dict:
         """Quello che identifica una versione dell'agente nei report di valutazione."""
-        return {"versione_prompt": self.versione_prompt, "provider": self.provider, "modello": self.modello,
+        return {"modalita": self.modalita,
+                "versione_prompt": self.versione_prompt_azienda if self.modalita == "azienda" else self.versione_prompt,
+                "provider": self.provider, "modello": self.modello,
                 "embedder": self.embedder, "modello_embedding": self.modello_embedding, "top_k": self.top_k}
 
 
@@ -94,4 +111,6 @@ def carica_config(percorso: str | None = None) -> Config:
         cartella_indice=os.getenv("CARTELLA_INDICE") or None,
         qdrant_url=os.getenv("QDRANT_URL") or None,
         cmms_url=os.getenv("CMMS_URL") or None,
+        dati_azienda=Path(os.environ["DATI_AZIENDA"]) if os.getenv("DATI_AZIENDA") else None,
+        cartella_immagini=Path(os.getenv("CARTELLA_IMMAGINI", str(RADICE / "output" / "immagini"))),
     )

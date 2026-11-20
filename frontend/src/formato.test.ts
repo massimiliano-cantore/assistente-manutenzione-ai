@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nomeStrumento, riassunto } from "./formato";
+import { immagini, nomeStrumento, riassunto } from "./formato";
 
 describe("riassunto dei passi", () => {
   it("conta le righe di una query", () => {
@@ -16,5 +16,14 @@ describe("riassunto dei passi", () => {
     const p = { strumento: "cerca_manuale", argomenti: { domanda: "badge" }, esito: { risultati: [{}, {}], trovati: 2 }, errore: false };
     expect(riassunto(p)).toBe("badge → 2 risultati");
     expect(nomeStrumento("cerca_manuale")).toBe("Manuali tecnici");
+  });
+});
+
+describe("immagini dei disegni", () => {
+  it("raccoglie le immagini evidenziate", () => {
+    const p = { strumento: "evidenzia_su_disegno", argomenti: { designators: ["Y1"] },
+                esito: { immagine: "0123456789ab.png" }, errore: false };
+    expect(immagini([p])).toEqual(["/api/immagini/0123456789ab.png"]);
+    expect(riassunto(p)).toBe("Y1");
   });
 });
