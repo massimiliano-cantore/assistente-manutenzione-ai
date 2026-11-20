@@ -19,6 +19,11 @@ MCU = re.compile(r"(?i)\b(STM32[A-Z]\d{2,3}\w*|STM8\w+|PIC\d{2}[A-Z]{1,2}\d+\w*|
                  r"EFM32\w+|EFR32\w+|R5F\w+|CC\d{4}\w*|AVR\w+|RP2040|1[268]L?F\d{2,5}[A-Z]?)\b")
 
 
+def in_cartella_old(percorso: Path) -> bool:
+    """Il firmware in una cartella chiamata 'old' (a qualunque livello) è superato e non va considerato."""
+    return any(parte.lower() == "old" for parte in percorso.parent.parts)
+
+
 def tipo(f: Path) -> tuple[str, str] | None:
     """('binario'|'sorgente'|'progetto', formato) oppure None."""
     s = f.suffix.lower()

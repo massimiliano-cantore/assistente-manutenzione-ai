@@ -56,3 +56,9 @@ def test_famiglia_e_compatibilita(tmp_path: Path):
 def test_pic_senza_prefisso():
     s = Scheda(codice="X", componenti={"U1": Componente("U1", valore="16F628A")})
     assert fw.mcu_della_scheda(s) == [("U1", "PIC16F628A")]
+
+
+def test_cartelle_old():
+    assert fw.in_cartella_old(Path("Gate/Firmware/Old/main.c"))
+    assert fw.in_cartella_old(Path("OLD/x/a.hex"))
+    assert not fw.in_cartella_old(Path("Gate/Firmware/old_versioni.hex"))

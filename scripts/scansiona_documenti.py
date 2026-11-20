@@ -183,7 +183,8 @@ def scansiona(radice: Path) -> tuple[dict, list[str]]:
     for cartella in sorted(p for p in radice.iterdir() if p.is_dir()):
         pdf_altium, pdf_altri, bom_file, firmware = [], [], [], []
         for f in sorted(cartella.rglob("*")):
-            if f.is_dir() and f.name.lower() in fw.CARTELLE_PROGETTO:
+            vecchio = fw.in_cartella_old(f.relative_to(radice))
+            if f.is_dir() and f.name.lower() in fw.CARTELLE_PROGETTO and not vecchio:
                 firmware.append(f)
             if not f.is_file():
                 continue
@@ -193,7 +194,10 @@ def scansiona(radice: Path) -> tuple[dict, list[str]]:
                 except Exception:
                     pdf_altri.append(f)
             elif fw.tipo(f):
-                firmware.append(f)
+                if vecchio:
+                    tot["fw_old"] += 1
+                else:
+                    firmware.append(f)
             elif f.suffix.lower() in ESTENSIONI_BOM and "bom" in f.name.lower():
                 bom_file.append(f)
         if not pdf_altium and not bom_file and not firmware:
@@ -283,7 +287,8 @@ def scansiona(radice: Path) -> tuple[dict, list[str]]:
     rapporto.insert(0, f"RIEPILOGO: {tot['prodotti']} prodotti, {tot['schede']} schede con netlist "
                        f"({tot['con_bom']} con BOM), {tot['senza_netlist']} prodotti senza PDF con netlist; "
                        f"firmware: {tot['fw_binari']} binari, {tot['fw_sorgenti']} file sorgente, "
-                       f"{tot['fw_progetti']} progetti, in {tot['fw_prodotti']} prodotti")
+                       f"{tot['fw_progetti']} progetti, in {tot['fw_prodotti']} prodotti "
+                       f"({tot['fw_old']} file nelle cartelle 'old' ignorati)")
     return {"schede": schede, "prodotti": prodotti}, rapporto
 
 
