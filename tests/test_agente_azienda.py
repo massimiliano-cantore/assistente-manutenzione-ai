@@ -28,3 +28,20 @@ def test_diagnosi_con_strumenti_elettrici(cfg, tmp_path):
     assert r.passi[2]["esito"]["componenti_attraversati"] == ["R10"]
     assert (tmp_path / "img" / r.passi[3]["esito"]["immagine"]).exists()
     assert "laboratorio riparazioni" in llm.ricevuti[0][0].content and "Misure da fare" in llm.ricevuti[0][0].content
+
+
+def test_storico_collegato_all_agente(cfg, tmp_path):
+    import json
+    (tmp_path / "azienda").mkdir()
+    azienda = cartella_azienda(tmp_path / "azienda")
+    (azienda / "storico").mkdir()
+    scheda = {"formato": "docai-scheda/1", "id": "00001_reso",
+              "campi": {"articolo": {"valore": "X1"}, "note": {"valore": "radio muta, sostituita R10"}}, "righe": []}
+    (azienda / "storico" / "00001_reso.json").write_text(json.dumps(scheda), encoding="utf-8")
+    c_cfg = dataclasses.replace(cfg, dati_azienda=azienda, cartella_immagini=tmp_path / "img")
+    llm = LLMCopione(copione=[chiamata("storico_riparazioni", "s1", sintomo="radio muta"),
+                              testo("Già visto: R10.")])
+    c = costruisci(c_cfg, llm=llm)
+    assert {"storico_riparazioni", "statistiche_guasti"} <= {s.name for s in c.strumenti}
+    r = c.assistente.chiedi("La radio è muta")
+    assert r.passi[0]["esito"]["casi"][0]["note"] == "radio muta, sostituita R10"

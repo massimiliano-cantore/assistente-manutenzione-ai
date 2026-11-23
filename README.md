@@ -28,6 +28,17 @@ same synthetic company and archive (~7,400 repairs), from digitized repair sheet
 | Electronics documentation (company mode) | Netlist read from Altium PDF bookmarks, BOM import (xls/csv), product map with board-to-board connectors, signal path across boards and series parts, components highlighted on the drawing, datasheet lookup (Mouser API, web fallback, compatible parts) with pin table extraction checked against the netlist. See [ISTANZA_AZIENDA.md](ISTANZA_AZIENDA.md) |
 | Frontend | **TypeScript + React** chat: shows every agent step and the approval card for CMMS actions |
 
+
+## Le tre parti del progetto
+
+| Parte | Repository | Cosa fa |
+|---|---|---|
+| Document AI | `document-ai-prodotto` | legge le schede di riparazione (anche scritte a mano), semaforo e revisione, export JSON |
+| Storico riparazioni | questo, `app/storico` | carica gli export JSON, li collega a prodotti, schede e componenti, statistiche dei guasti |
+| Assistente tecnico | questo | diagnosi guidata con schemi, BOM, firmware, datasheet e storico |
+
+Collegamento via file: vedi `ISTANZA_AZIENDA.md`, sezione 7.
+
 ## Architecture
 
 ```mermaid

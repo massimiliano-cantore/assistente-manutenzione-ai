@@ -126,3 +126,31 @@ Limiti: per gli STM32 un pin analogico non si distingue da uno non usato; per PI
 Il firmware è proprietà dell'azienda: l'analisi richiede la sua autorizzazione.
 Licenze: l'emulatore Unicorn è GPL-2.0 (va bene per uso interno; per distribuire il prodotto a terzi va valutato),
 Capstone e intelhex sono BSD, pyelftools è di pubblico dominio.
+
+## 7. Storico delle riparazioni (da Document AI)
+
+Le schede di riparazione lette e confermate con **Document AI** (progetto `document-ai-prodotto`) diventano lo
+storico dei guasti dell'assistente. Le tre parti sono collegate da file, così ognuna si può usare anche da sola:
+
+```
+schede RESO (PDF/foto) ─► Document AI ─► conferma operatore ─► export JSON ─► DATI_AZIENDA\storico\ ─► assistente
+                                                                docai-scheda/1   (un file per scheda)
+```
+
+1. In Document AI: sezione **Esporta** → "Prepara lo zip JSON" (e scompatta in `storico\`), oppure
+   `python elabora.py ... --esporta-json C:\percorso\produzione1\storico`
+2. Controllo del collegamento: `python -m scripts.riepilogo_storico C:\percorso\produzione1` scrive
+   `storico_report.txt` (riparazioni per prodotto, componenti più sostituiti, seriali tornati più volte).
+3. Gli articoli che non si riconoscono da soli si associano a mano in `storico\storico.yaml`:
+   ```yaml
+   articoli:
+     "40806": "Elettromaniglie - seriale 03 000"     # codice articolo -> nome del prodotto in prodotti.yaml
+   campi:                                            # facoltativo: nomi dei campi diversi da quelli soliti
+     note: [difetto_riscontrato]
+   ```
+   In alternativa, nel prodotto in `prodotti.yaml`: `articoli: ["40806", "40810"]`.
+
+All'avvio l'assistente carica lo storico e ha due strumenti in più: `storico_riparazioni` (casi simili a un sintomo,
+storia di un seriale) e `statistiche_guasti` (componenti più sostituiti, cause annotate, firmware, seriali che
+tornano). Quando le note citano un componente dello schema (es. "sostituito K1"), il riferimento viene collegato
+alla scheda del prodotto. `/api/salute` mostra quante riparazioni ha caricato.

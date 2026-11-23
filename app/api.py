@@ -62,7 +62,8 @@ def crea_app(componenti: Componenti | None = None, frontend: Path | None = FRONT
     def salute():
         c: Componenti = app.state.c
         return {"stato": "ok", **c.cfg.firma(), "sezioni_manuali": len(c.kb.sezioni),
-                "profili_casi": len(c.kb.profili), "schede": len(c.catalogo.schede) if c.catalogo else 0}
+                "profili_casi": len(c.kb.profili), "schede": len(c.catalogo.schede) if c.catalogo else 0,
+                "riparazioni_storico": len(c.extra["storico"].riparazioni) if "storico" in c.extra else 0}
 
     @app.get("/api/immagini/{nome}")
     def immagine(nome: str):

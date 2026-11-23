@@ -13,6 +13,7 @@ from app.agente.servizio import Assistente
 from app.agente.strumenti import crea_strumenti
 from app.agente.strumenti_elettrici import crea_strumenti_elettrici
 from app.agente.strumenti_firmware import crea_strumenti_firmware
+from app.agente.strumenti_storico import crea_strumenti_storico
 from app.cmms.api import crea_app as crea_app_cmms
 from app.cmms.client import ClienteCMMS
 from app.cmms.store import CMMSStore
@@ -49,8 +50,16 @@ def _componenti_azienda(cfg: Config, llm, kb, catalogo, datasheet) -> Componenti
         crea_strumenti_firmware(catalogo, datasheet)
     if kb.sezioni:   # istruzioni e manuali dell'azienda, se presenti nella cartella documenti/
         strumenti = [s for s in crea_strumenti(None, kb, None) if s.name == "cerca_manuale"] + strumenti
-    return Componenti(cfg, None, kb, None, strumenti, None, catalogo, datasheet,
-                      {"estrattore": estrattore_llm})
+    extra = {"estrattore": estrattore_llm}
+    cartella_storico = cfg.dati_azienda / "storico"
+    if cartella_storico.exists():   # schede di riparazione esportate da Document AI
+        from app.storico import Storico
+        storico = Storico.carica(cartella_storico)
+        if storico.riparazioni:
+            extra["storico"] = storico
+            extra["storico_collegamento"] = storico.collega(catalogo, cfg.dati_azienda / "prodotti.yaml")
+            strumenti = crea_strumenti_storico(storico) + strumenti
+    return Componenti(cfg, None, kb, None, strumenti, None, catalogo, datasheet, extra)
 
 
 def costruisci(cfg: Config | None = None, llm=None, con_agente: bool = True, kb: KnowledgeBase | None = None,
