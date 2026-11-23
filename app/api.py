@@ -80,4 +80,8 @@ def crea_app(componenti: Componenti | None = None, frontend: Path | None = FRONT
 
     if frontend and frontend.exists():
         app.mount("/", StaticFiles(directory=frontend, html=True), name="frontend")
+    else:   # interfaccia React non compilata (serve Node.js): pagina semplice incorporata
+        @app.get("/")
+        def pagina_base():
+            return FileResponse(Path(__file__).parent / "pagina_base.html", media_type="text/html")
     return app

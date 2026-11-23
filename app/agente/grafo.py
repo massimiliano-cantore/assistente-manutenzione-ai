@@ -24,7 +24,7 @@ def crea_llm(cfg, strumenti: list):
 
     def modello(nome: str):
         return ChatOpenAI(model=nome, base_url=cfg.base_url, api_key=cfg.api_key, temperature=cfg.temperatura,
-                          max_retries=2, timeout=60).bind_tools(strumenti)
+                          max_retries=2, timeout=900 if cfg.provider == "ollama" else 60).bind_tools(strumenti)
 
     principale = modello(cfg.modello)
     riserve = [modello(m) for m in cfg.alternative if m != cfg.modello]
@@ -38,7 +38,7 @@ def crea_llm_semplice(cfg):
     if not cfg.api_key:
         raise RuntimeError("manca la chiave API")
     return ChatOpenAI(model=cfg.modello, base_url=cfg.base_url, api_key=cfg.api_key, temperature=0,
-                      max_retries=2, timeout=120)
+                      max_retries=2, timeout=900 if cfg.provider == "ollama" else 120)
 
 
 def crea_grafo(llm: BaseChatModel, strumenti: list, prompt_sistema: str, checkpointer=None):

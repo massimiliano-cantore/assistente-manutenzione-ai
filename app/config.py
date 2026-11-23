@@ -99,7 +99,9 @@ def carica_config(percorso: str | None = None) -> Config:
         versione_prompt=os.getenv("VERSIONE_PROMPT", y["versione_prompt"]),
         provider=os.getenv("LLM_PROVIDER", llm["provider"]),
         modello=os.getenv("LLM_MODEL", llm["modello"]),
-        alternative=llm.get("alternative", []),
+        # i modelli di riserva sono del provider di config/agente.yaml: con un altro provider non valgono
+        alternative=llm.get("alternative", []) if os.getenv("LLM_PROVIDER", llm["provider"]) == llm["provider"]
+        else [],
         temperatura=float(llm.get("temperatura", 0)),
         max_passi=int(llm.get("max_passi", 8)),
         embedder=os.getenv("EMBEDDER", rag["embedder"]),
