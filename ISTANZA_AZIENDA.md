@@ -88,3 +88,30 @@ uvicorn app.api:crea_app --factory --port 8000
 ```
 
 Poi http://localhost:8000. Domanda di prova: *"la centralina non comunica più tramite RF, cosa potrebbe essere?"*
+
+## 6. Firmware
+
+Lo scanner elenca il firmware di ogni prodotto (binari, sorgenti, progetti) e lo associa alle schede; i file nelle
+cartelle chiamate `old` sono ignorati. Per i microcontrollori **STM32** l'assistente ricava dal binario
+(`.hex`, `.bin`, `.elf`), senza sorgente, come il firmware usa ogni pin (ingresso con pull-up, uscita, PWM,
+seriale...) e lo incrocia con lo schema: strumento `firmware_scheda`.
+
+Come funziona: il codice viene eseguito in un emulatore dall'avvio e si registra cosa scrive nei registri GPIO e
+delle periferiche. Funziona con HAL, LL e codice a registri. Il risultato va in `firmware_analisi/` (una volta per
+file).
+
+Per passare dal nome della porta (es. `PA2`) al numero di pin serve la piedinatura del micro: viene presa dal
+datasheet (chiave Mouser/Tavily) oppure si scrive a mano nella scheda in `prodotti.yaml`:
+
+```yaml
+- codice: OPR030
+  mcu: {designator: U4, codice: STM32G031G4U6}     # facoltativo, se la BOM non lo dice
+  piedinatura_mcu: {PA2: 8, PA3: 9, PA15: 22, PB6: 26, PB8: 28}
+```
+
+Prova da riga di comando: `python -m scripts.analizza_firmware percorso\file.hex --mcu STM32G031G4U6`
+
+Limiti: PIC e AVR non ancora supportati; un pin analogico non si distingue da uno non usato.
+Il firmware è proprietà dell'azienda: l'analisi richiede la sua autorizzazione.
+Licenze: l'emulatore Unicorn è GPL-2.0 (va bene per uso interno; per distribuire il prodotto a terzi va valutato),
+Capstone e intelhex sono BSD, pyelftools è di pubblico dominio.

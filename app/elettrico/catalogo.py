@@ -40,8 +40,11 @@ def importa_scheda(cartella: Path, voce: dict) -> Scheda:
 
 
 class Catalogo:
-    def __init__(self, schede: dict[str, Scheda], prodotti: list[Prodotto], cartella: Path | None = None):
+    def __init__(self, schede: dict[str, Scheda], prodotti: list[Prodotto], cartella: Path | None = None,
+                 firmware: dict[str, list[dict]] | None = None, extra: dict[str, dict] | None = None):
         self.schede, self.prodotti, self.cartella = schede, prodotti, cartella
+        self.firmware = firmware or {}        # scheda -> file firmware trovati dallo scanner
+        self.extra = extra or {}              # scheda -> voci a mano di prodotti.yaml (mcu, piedinatura_mcu)
 
     @classmethod
     def carica(cls, cartella: str | Path) -> Catalogo:
@@ -52,7 +55,7 @@ class Catalogo:
             schede[voce["codice"]] = importa_scheda(cartella, voce)
             log.info("scheda %s: %d componenti, %d net", voce["codice"], len(schede[voce["codice"]].componenti),
                      len(schede[voce["codice"]].nets))
-        prodotti = []
+        prodotti, firmware = [], {}
         for p in conf.get("prodotti", []):
             coll = []
             for c in p.get("collegamenti", []):
@@ -62,7 +65,11 @@ class Catalogo:
                 sb, cb = c["a"].split(".", 1)
                 coll.append(Collegamento(sa, ca, sb, cb, {str(k): str(v) for k, v in (c.get("mappa") or {}).items()}))
             prodotti.append(Prodotto(p["nome"], p["schede"], coll, p.get("descrizione", "")))
-        return cls(schede, prodotti, cartella)
+            for b in (p.get("firmware") or {}).get("binari", []):
+                if b.get("scheda"):
+                    firmware.setdefault(b["scheda"], []).append(b)
+        extra = {v["codice"]: {k: v[k] for k in ("mcu", "piedinatura_mcu") if k in v} for v in conf.get("schede", [])}
+        return cls(schede, prodotti, cartella, firmware, extra)
 
     # --- ricerca -------------------------------------------------------------------------------------------
     def scheda(self, codice: str) -> Scheda:

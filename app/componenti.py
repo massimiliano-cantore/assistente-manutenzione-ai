@@ -12,6 +12,7 @@ from app.agente.grafo import crea_grafo, crea_llm
 from app.agente.servizio import Assistente
 from app.agente.strumenti import crea_strumenti
 from app.agente.strumenti_elettrici import crea_strumenti_elettrici
+from app.agente.strumenti_firmware import crea_strumenti_firmware
 from app.cmms.api import crea_app as crea_app_cmms
 from app.cmms.client import ClienteCMMS
 from app.cmms.store import CMMSStore
@@ -44,7 +45,8 @@ def _componenti_azienda(cfg: Config, llm, kb, catalogo, datasheet) -> Componenti
             datasheet = ServizioDatasheet(cfg.dati_azienda / "datasheet")
         except Exception:
             datasheet = None
-    strumenti = crea_strumenti_elettrici(catalogo, datasheet, cfg.cartella_immagini)
+    strumenti = crea_strumenti_elettrici(catalogo, datasheet, cfg.cartella_immagini) + \
+        crea_strumenti_firmware(catalogo, datasheet)
     if kb.sezioni:   # istruzioni e manuali dell'azienda, se presenti nella cartella documenti/
         strumenti = [s for s in crea_strumenti(None, kb, None) if s.name == "cerca_manuale"] + strumenti
     return Componenti(cfg, None, kb, None, strumenti, None, catalogo, datasheet,

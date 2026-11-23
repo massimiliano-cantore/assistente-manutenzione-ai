@@ -1,0 +1,106 @@
+"""Strumenti dell'agente sul firmware: quali file ci sono per una scheda e cosa fa il firmware sui pin del
+microcontrollore, ricavato dal binario e incrociato con lo schema."""
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+from langchain_core.tools import tool
+
+from app.datasheet.servizio import ServizioDatasheet
+from app.elettrico.catalogo import Catalogo
+from app.firmware import inventario, stm32
+
+
+def _chiave_versione(nome: str) -> list:
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", nome)]
+
+
+def _mcu(catalogo: Catalogo, scheda: str) -> tuple[str, str]:
+    """(designator, codice) del microcontrollore: da prodotti.yaml se indicato a mano, altrimenti dallo schema."""
+    s = catalogo.scheda(scheda)
+    a_mano = catalogo.extra.get(s.codice, {}).get("mcu")
+    if isinstance(a_mano, dict):
+        return a_mano.get("designator", ""), a_mano.get("codice", "")
+    trovati = inventario.mcu_della_scheda(s)
+    stm = [m for m in trovati if m[1].startswith("STM32")]
+    return (stm or trovati or [("", "")])[0]
+
+
+def scegli_file(file: list[dict], richiesto: str = "") -> dict | None:
+    if richiesto:
+        for f in file:
+            if richiesto.lower() in Path(f["file"]).name.lower():
+                return f
+        return None
+    arm = [f for f in file if f.get("famiglia") == "STM32" or f.get("formato") in ("bin", "elf")]
+    return max(arm or file, key=lambda f: _chiave_versione(Path(f["file"]).name), default=None)
+
+
+def crea_strumenti_firmware(catalogo: Catalogo, datasheet: ServizioDatasheet | None) -> list:
+    cartella = catalogo.cartella or Path(".")
+    cache = cartella / "firmware_analisi"
+
+    @tool
+    def elenca_firmware(scheda: str) -> dict:
+        """Elenca i file firmware (.hex, .bin, .elf) associati a una scheda, con la famiglia di microcontrollore
+        probabile. Utile per sapere quali versioni esistono (es. personalizzazioni per cliente)."""
+        file = catalogo.firmware.get(catalogo.scheda(scheda).codice, [])
+        return {"scheda": scheda, "file": [{"nome": Path(f["file"]).name, "formato": f.get("formato"),
+                                            "famiglia": f.get("famiglia", "")} for f in
+                                           sorted(file, key=lambda f: _chiave_versione(Path(f["file"]).name))]}
+
+    @tool
+    def firmware_scheda(scheda: str, file: str = "") -> dict:
+        """Cosa fa il firmware sui pin del microcontrollore di una scheda, ricavato dal binario (senza sorgente):
+        per ogni pin usato dice se è ingresso (con pull-up/pull-down), uscita o funzione alternativa (timer/PWM,
+        seriale, SPI, I2C) e a quale net e componenti è collegato sullo schema. Elenca anche le periferiche usate e
+        i moduli del programma. file: parte del nome di una versione precisa ('' = la più recente).
+        Usalo per sapere cosa aspettarsi su un pin (es. ingresso con pull-up: a riposo alto) e per capire quale
+        segnale il micro legge o comanda."""
+        s = catalogo.scheda(scheda)
+        disponibili = catalogo.firmware.get(s.codice, [])
+        if not disponibili:
+            return {"errore": f"nessun firmware associato alla scheda {s.codice} in prodotti.yaml "
+                              "(rilanciare lo scanner o aggiungerlo a mano)"}
+        scelto = scegli_file(disponibili, file)
+        if not scelto:
+            return {"errore": f"nessun file che contenga '{file}'", "disponibili":
+                    [Path(f["file"]).name for f in disponibili][:30]}
+        des, codice = _mcu(catalogo, s.codice)
+        try:
+            r = stm32.analizza(cartella / scelto["file"], cache=cache, mcu=codice)
+        except stm32.FirmwareNonSupportato as e:
+            return {"file": Path(scelto["file"]).name, "errore": str(e)}
+        mappa = {k.upper(): str(v) for k, v in (catalogo.extra.get(s.codice, {}).get("piedinatura_mcu") or {}).items()}
+        fonte_mappa = "prodotti.yaml" if mappa else None
+        if not mappa and datasheet is not None and codice and des:
+            try:
+                info = catalogo.info_componente(s.codice, des)
+                p = datasheet.piedinatura(codice, n_pin=len(info["pin"]), package=info.get("footprint", ""))
+                mappa = stm32.nome_pin_a_numero(p)
+                fonte_mappa = f"datasheet ({p.get('fonte', '')})" if mappa else None
+            except Exception:  # noqa: BLE001 - senza datasheet si danno solo i nomi delle porte
+                mappa = {}
+        pin = []
+        for v in r["pin"]:
+            numero = mappa.get(v["pin"])
+            voce = dict(v)
+            if numero and des:
+                rif = f"{des}-{numero}"
+                net = s.net_del_pin(rif)
+                voce.update({"pin_componente": rif, "net": net or "(non collegato)",
+                             "collegato_a": sorted(x for x in s.nets.get(net, ()) if x != rif)[:6] if net else []})
+            pin.append(voce)
+        out = {"scheda": s.codice, "file": Path(scelto["file"]).name, "microcontrollore": f"{des} {codice}".strip(),
+               "versioni_disponibili": len(disponibili), "pin": pin,
+               "periferiche_configurate": r["periferiche_configurate"], "moduli_sorgente": r["moduli_sorgente"],
+               "testi": r["testi"][:20], "limiti": r["limiti"]}
+        if not mappa:
+            out["avviso"] = ("corrispondenza porta -> numero di pin non disponibile: indicare 'piedinatura_mcu' in "
+                             "prodotti.yaml o configurare la ricerca datasheet; i pin sono dati come nomi di porta")
+        else:
+            out["corrispondenza_pin_da"] = fonte_mappa
+        return out
+
+    return [elenca_firmware, firmware_scheda]
