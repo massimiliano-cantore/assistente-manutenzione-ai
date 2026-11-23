@@ -92,13 +92,23 @@ Poi http://localhost:8000. Domanda di prova: *"la centralina non comunica più t
 ## 6. Firmware
 
 Lo scanner elenca il firmware di ogni prodotto (binari, sorgenti, progetti) e lo associa alle schede; i file nelle
-cartelle chiamate `old` sono ignorati. Per i microcontrollori **STM32** l'assistente ricava dal binario
-(`.hex`, `.bin`, `.elf`), senza sorgente, come il firmware usa ogni pin (ingresso con pull-up, uscita, PWM,
-seriale...) e lo incrocia con lo schema: strumento `firmware_scheda`.
+cartelle chiamate `old` sono ignorati. L'assistente ricava dal binario, senza sorgente, come il firmware usa ogni
+pin (ingresso con pull-up, uscita, PWM, seriale...) e lo incrocia con lo schema: strumento `firmware_scheda`.
 
-Come funziona: il codice viene eseguito in un emulatore dall'avvio e si registra cosa scrive nei registri GPIO e
-delle periferiche. Funziona con HAL, LL e codice a registri. Il risultato va in `firmware_analisi/` (una volta per
-file).
+| Microcontrollore | File | Metodo |
+|---|---|---|
+| STM32 (ARM Cortex-M) | .hex, .bin, .elf | emulazione dall'avvio: si registra cosa scrive nei registri GPIO e delle periferiche (HAL, LL o registri) |
+| PIC16 midrange (16F6xx, 16F8xx, 12F6xx) | .hex | analisi statica delle scritture su TRIS, PORT, OPTION_REG e periferiche |
+| PIC18 | .hex | analisi statica su TRIS, LAT, INTCON2/WPUB e periferiche |
+| AVR (ATmega) | .hex | analisi statica su DDR, PORT (pull-up) e periferiche |
+
+Il risultato va in `firmware_analisi/` (una volta per file). L'architettura si riconosce dal micro sullo schema o,
+se manca, dagli indirizzi del .hex (gli AVR partono da 0 come altri: lì serve il codice del micro, `mcu` nella
+scheda in `prodotti.yaml` o `--mcu`).
+
+Rapporto su tutti i prodotti: `python -m scripts.analizza_firmware --tutti C:\percorso\produzione1` scrive
+`firmware_report.txt`: per ogni scheda la versione più recente analizzata e incrociata con lo schema, per il
+firmware senza scheda una riga per serie (le versioni dello stesso firmware sono raggruppate).
 
 Per passare dal nome della porta (es. `PA2`) al numero di pin serve la piedinatura del micro: viene presa dal
 datasheet (chiave Mouser/Tavily) oppure si scrive a mano nella scheda in `prodotti.yaml`:
@@ -111,7 +121,8 @@ datasheet (chiave Mouser/Tavily) oppure si scrive a mano nella scheda in `prodot
 
 Prova da riga di comando: `python -m scripts.analizza_firmware percorso\file.hex --mcu STM32G031G4U6`
 
-Limiti: PIC e AVR non ancora supportati; un pin analogico non si distingue da uno non usato.
+Limiti: per gli STM32 un pin analogico non si distingue da uno non usato; per PIC e AVR l'analisi è statica
+(dice cosa il programma configura in almeno un punto, non lo stato in un istante). PIC16F1xxx (enhanced) non ancora.
 Il firmware è proprietà dell'azienda: l'analisi richiede la sua autorizzazione.
 Licenze: l'emulatore Unicorn è GPL-2.0 (va bene per uso interno; per distribuire il prodotto a terzi va valutato),
 Capstone e intelhex sono BSD, pyelftools è di pubblico dominio.

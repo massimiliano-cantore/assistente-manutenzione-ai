@@ -299,8 +299,8 @@ def analizza(f: Path, cache: Path | None = None, mcu: str = "", max_istruzioni: 
             return json.loads(fc.read_text(encoding="utf-8"))
     base, img = leggi_immagine(f)
     if not e_cortex_m(base, img):
-        raise FirmwareNonSupportato("non sembra un firmware ARM Cortex-M (STM32): per PIC e AVR serve un "
-                                    "disassemblatore diverso, non ancora disponibile")
+        raise FirmwareNonSupportato("non sembra un firmware ARM Cortex-M valido (tabella dei vettori iniziale "
+                                    "non riconosciuta): file incompleto o di un'altra architettura")
     scritture, bsrr, toccati, eseguite = _emula(base, img, max_istruzioni)
     famiglia, pin = _decodifica_gpio(scritture, bsrr, mcu)
     periferiche = sorted({PERIFERICHE[t] for t in toccati if t in PERIFERICHE})
@@ -326,6 +326,6 @@ def nome_pin_a_numero(piedinatura: dict | None) -> dict[str, str]:
     """Da una piedinatura del datasheet ({'pin': [{'numero','nome'}]}) la mappa 'PA2' -> '8'."""
     out = {}
     for p in (piedinatura or {}).get("pin", []):
-        for nome in re.findall(r"P[A-K]\d{1,2}", str(p.get("nome", "")).upper()):
+        for nome in re.findall(r"\b(?:P[A-K]\d{1,2}|R[A-K]\d|GP\d)\b", str(p.get("nome", "")).upper()):
             out.setdefault(nome, str(p["numero"]))
     return out
