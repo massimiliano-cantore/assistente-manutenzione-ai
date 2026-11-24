@@ -19,8 +19,9 @@ def _chat(cfg, nome: str, temperatura: float, tentativi: int, timeout: int):
     """Modello di chat del provider scelto: Claude con la libreria Anthropic, gli altri con l'API compatibile OpenAI."""
     if cfg.provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
-        return ChatAnthropic(model=nome, api_key=cfg.api_key, temperature=temperatura, max_retries=tentativi,
-                             timeout=timeout, max_tokens=4096)
+        # i modelli Claude recenti accettano solo la temperatura predefinita: non si passa
+        return ChatAnthropic(model=nome, api_key=cfg.api_key, max_retries=tentativi, timeout=timeout,
+                             max_tokens=4096)
     from langchain_openai import ChatOpenAI
     return ChatOpenAI(model=nome, base_url=cfg.base_url, api_key=cfg.api_key, temperature=temperatura,
                       max_retries=tentativi, timeout=timeout)

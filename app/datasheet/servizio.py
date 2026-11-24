@@ -46,7 +46,9 @@ Estrattore = Callable[[str, str, int | None, str], Piedinatura]
 
 def estrattore_llm(llm) -> Estrattore:
     """Estrazione strutturata con il modello linguistico (lo stesso dell'agente o uno locale)."""
-    strutturato = llm.with_structured_output(Piedinatura, method="function_calling")
+    # Claude: uscita con schema JSON (la chiamata forzata a uno strumento non è supportata dai modelli recenti)
+    metodo = "json_schema" if type(llm).__name__ == "ChatAnthropic" else "function_calling"
+    strutturato = llm.with_structured_output(Piedinatura, method=metodo)
 
     def estrai(testo: str, codice: str, n_pin: int | None, package: str) -> Piedinatura:
         richiesta = (f"Questo è un estratto del datasheet di {codice}. Estrai la tabella dei pin "
