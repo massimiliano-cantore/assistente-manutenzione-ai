@@ -16,6 +16,7 @@ def carica_env(percorso: Path = RADICE / ".env") -> None:
     già impostate. Così in locale basta copiare .env.example in .env e inserire la chiave."""
     if not percorso.exists():
         return
+    valori: dict[str, str] = {}
     for riga in percorso.read_text(encoding="utf-8").splitlines():
         riga = riga.strip()
         if not riga or riga.startswith("#") or "=" not in riga:
@@ -23,7 +24,9 @@ def carica_env(percorso: Path = RADICE / ".env") -> None:
         chiave, _, valore = riga.partition("=")
         valore = valore.strip().strip('"').strip("'")
         if valore:
-            os.environ.setdefault(chiave.strip(), valore)
+            valori[chiave.strip()] = valore      # se una chiave è scritta due volte vale l'ultima riga
+    for chiave, valore in valori.items():
+        os.environ.setdefault(chiave, valore)
 
 
 carica_env()
