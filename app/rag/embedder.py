@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+import logging
+from pathlib import Path
 from typing import Protocol
 
 import numpy as np
@@ -28,7 +30,10 @@ class FastEmbedEmbedder:
 
         self.nome = f"fastembed:{modello}"
         # nell'immagine Docker il modello è scaricato durante la build in FASTEMBED_CACHE_PATH
-        self._m = TextEmbedding(model_name=modello, cache_dir=cache_dir or os.getenv("FASTEMBED_CACHE_PATH"))
+        # cache nel progetto e non nella cartella Temp di Windows (che può dare "accesso negato")
+        cartella = cache_dir or os.getenv("FASTEMBED_CACHE_PATH") or str(
+            Path(__file__).resolve().parents[2] / ".cache" / "fastembed")
+        self._m = TextEmbedding(model_name=modello, cache_dir=cartella)
         self.dim = len(next(iter(self._m.embed(["prova"]))))
 
     def adatta(self, testi: list[str]) -> None:  # modello pre-addestrato: niente da adattare
@@ -76,5 +81,9 @@ def crea_embedder(tipo: str, modello: str) -> Embedder:
     if tipo == "tfidf":
         return TfidfEmbedder()
     if tipo == "fastembed":
-        return FastEmbedEmbedder(modello)
+        try:
+            return FastEmbedEmbedder(modello)
+        except Exception as e:  # noqa: BLE001 - senza modello scaricabile si continua con TF-IDF
+            logging.getLogger(__name__).warning("modello di embedding non disponibile (%s): uso TF-IDF", e)
+            return TfidfEmbedder()
     raise ValueError(f"embedder sconosciuto: {tipo}")

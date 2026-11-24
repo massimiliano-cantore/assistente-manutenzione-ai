@@ -13,3 +13,4 @@ azienda/
 dati_azienda/
 *.SchDoc
 *.PcbDoc
+.cache/

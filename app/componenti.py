@@ -40,7 +40,13 @@ def _componenti_azienda(cfg: Config, llm, kb, catalogo, datasheet) -> Componenti
     from app.elettrico.catalogo import Catalogo
 
     catalogo = catalogo or Catalogo.carica(cfg.dati_azienda)
-    kb = kb or KnowledgeBase(cfg, None, cartella_manuali=cfg.dati_azienda / "documenti")
+    if kb is None:
+        from app.dati import sezioni_manuali
+        from app.rag.embedder import TfidfEmbedder
+        documenti = cfg.dati_azienda / "documenti"
+        # senza manuali da indicizzare non serve scaricare il modello di embedding
+        vuota = not documenti.exists() or not sezioni_manuali(documenti)
+        kb = KnowledgeBase(cfg, None, embedder=TfidfEmbedder() if vuota else None, cartella_manuali=documenti)
     if datasheet is None:
         try:
             datasheet = ServizioDatasheet(cfg.dati_azienda / "datasheet")
