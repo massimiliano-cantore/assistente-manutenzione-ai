@@ -52,7 +52,13 @@ class Catalogo:
         conf = yaml.safe_load((cartella / "prodotti.yaml").read_text(encoding="utf-8"))
         schede = {}
         for voce in conf.get("schede", []):
-            schede[voce["codice"]] = importa_scheda(cartella, voce)
+            try:
+                schede[voce["codice"]] = importa_scheda(cartella, voce)
+            except ImportError:
+                raise           # libreria mancante: va installata, non si salta in silenzio
+            except Exception as e:  # noqa: BLE001 - un file rovinato non deve fermare tutto il catalogo
+                log.warning("scheda %s saltata: %s", voce.get("codice"), e)
+                continue
             log.info("scheda %s: %d componenti, %d net", voce["codice"], len(schede[voce["codice"]].componenti),
                      len(schede[voce["codice"]].nets))
         prodotti, firmware = [], {}
