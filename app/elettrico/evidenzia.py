@@ -32,7 +32,12 @@ def evidenzia(pdf: str, designators: list[str], cartella: Path, scala: float = 2
         m = 28 * scala / 2.5
         colore = COLORI[i % len(COLORI)]
         d.rectangle([x0 - m, y0 - m * 0.6, x1 + m * 1.6, y1 + m * 1.8], outline=colore, width=int(3 * scala / 2.5) + 1)
-        d.text((x1 + m * 1.6 + 4, y0 - m * 0.6), des, fill=colore, font=font)
+        # etichetta sopra il riquadro, su fondo bianco, così non si confonde con i riquadri vicini
+        sx, sy = x0 - m, y0 - m * 0.6
+        b = d.textbbox((0, 0), des, font=font)
+        w, h = b[2] - b[0], b[3] - b[1]
+        d.rectangle([sx, sy - h - 6, sx + w + 6, sy - 1], fill="white", outline=colore)
+        d.text((sx + 3 - b[0], sy - h - 3 - b[1]), des, fill=colore, font=font)
     cartella.mkdir(parents=True, exist_ok=True)
     nome = hashlib.sha1(f"{pdf}|{'|'.join(designators)}".encode()).hexdigest()[:12] + ".png"
     img.save(cartella / nome)
