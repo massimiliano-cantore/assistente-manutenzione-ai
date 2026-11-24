@@ -15,9 +15,19 @@ from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 
+def _chat(cfg, nome: str, temperatura: float, tentativi: int, timeout: int):
+    """Modello di chat del provider scelto: Claude con la libreria Anthropic, gli altri con l'API compatibile OpenAI."""
+    if cfg.provider == "anthropic":
+        from langchain_anthropic import ChatAnthropic
+        return ChatAnthropic(model=nome, api_key=cfg.api_key, temperature=temperatura, max_retries=tentativi,
+                             timeout=timeout, max_tokens=4096)
+    from langchain_openai import ChatOpenAI
+    return ChatOpenAI(model=nome, base_url=cfg.base_url, api_key=cfg.api_key, temperature=temperatura,
+                      max_retries=tentativi, timeout=timeout)
+
+
 def crea_llm(cfg, strumenti: list):
     """Modello principale + modelli di riserva, tutti con gli strumenti collegati."""
-    from langchain_openai import ChatOpenAI
 
     if not cfg.api_key:
         raise RuntimeError(f"manca la chiave API: imposta {cfg.provider.upper()}_API_KEY (o LLM_API_KEY)")
@@ -28,9 +38,8 @@ def crea_llm(cfg, strumenti: list):
         # con modelli di riserva non si aspetta: al limite di richieste (429) si passa subito al modello successivo,
         # che su Groq ha un limite suo
         tentativi = 0 if riserve_presenti else 2
-        return ChatOpenAI(model=nome, base_url=cfg.base_url, api_key=cfg.api_key, temperature=cfg.temperatura,
-                          max_retries=tentativi, timeout=900 if cfg.provider == "ollama" else 60
-                          ).bind_tools(strumenti)
+        return _chat(cfg, nome, cfg.temperatura, tentativi, 900 if cfg.provider == "ollama" else 90
+                     ).bind_tools(strumenti)
 
     principale = modello(cfg.modello)
     riserve = [modello(m) for m in cfg.alternative if m != cfg.modello]
@@ -39,12 +48,10 @@ def crea_llm(cfg, strumenti: list):
 
 def crea_llm_semplice(cfg):
     """Modello senza strumenti, per compiti di estrazione (es. la piedinatura da un datasheet)."""
-    from langchain_openai import ChatOpenAI
 
     if not cfg.api_key:
         raise RuntimeError("manca la chiave API")
-    return ChatOpenAI(model=cfg.modello, base_url=cfg.base_url, api_key=cfg.api_key, temperature=0,
-                      max_retries=2, timeout=900 if cfg.provider == "ollama" else 120)
+    return _chat(cfg, cfg.modello, 0, 2, 900 if cfg.provider == "ollama" else 120)
 
 
 def crea_grafo(llm: BaseChatModel, strumenti: list, prompt_sistema: str, checkpointer=None):

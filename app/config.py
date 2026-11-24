@@ -28,10 +28,16 @@ def carica_env(percorso: Path = RADICE / ".env") -> None:
 
 carica_env()
 
+# modello principale e di riserva quando LLM_MODEL non è indicato e il provider non è quello di agente.yaml
+PREDEFINITI = {
+    "anthropic": ("claude-sonnet-5-5", ["claude-haiku-5-5"]),
+}
+
 PROVIDER = {  # nome -> base_url delle API compatibili OpenAI
     "groq": "https://api.groq.com/openai/v1",
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
     "openai": "https://api.openai.com/v1",
+    "anthropic": "https://api.anthropic.com",  # Claude: usa la libreria Anthropic, non l'API compatibile OpenAI
     "ollama": "http://localhost:11434/v1",      # modelli in locale: i documenti non escono dall'azienda
 }
 
@@ -95,13 +101,14 @@ def carica_config(percorso: str | None = None) -> Config:
     p = Path(percorso or os.getenv("CONFIG_AGENTE", RADICE / "config" / "agente.yaml"))
     y = yaml.safe_load(p.read_text(encoding="utf-8"))
     llm, rag, soglie = y["llm"], y["rag"], y["soglie"]
+    provider = os.getenv("LLM_PROVIDER", llm["provider"])
     return Config(
         versione_prompt=os.getenv("VERSIONE_PROMPT", y["versione_prompt"]),
-        provider=os.getenv("LLM_PROVIDER", llm["provider"]),
-        modello=os.getenv("LLM_MODEL", llm["modello"]),
-        # i modelli di riserva sono del provider di config/agente.yaml: con un altro provider non valgono
-        alternative=llm.get("alternative", []) if os.getenv("LLM_PROVIDER", llm["provider"]) == llm["provider"]
-        else [],
+        provider=provider,
+        modello=os.getenv("LLM_MODEL") or PREDEFINITI.get(provider, (llm["modello"], []))[0],
+        # i modelli di riserva di config/agente.yaml sono del suo provider: con un altro si usano quelli predefiniti
+        alternative=llm.get("alternative", []) if provider == llm["provider"]
+        else PREDEFINITI.get(provider, ("", []))[1],
         temperatura=float(llm.get("temperatura", 0)),
         max_passi=int(llm.get("max_passi", 8)),
         embedder=os.getenv("EMBEDDER", rag["embedder"]),
