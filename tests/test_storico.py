@@ -106,3 +106,20 @@ def test_limiti_risultati():
 
     r = limita([tanti], max_caratteri=3000)[0].invoke({})
     assert len(r["pin"]) <= 13 and str(r["pin"][-1]).startswith("... e altri")
+
+
+def test_cerca_prodotto(tmp_path: Path):
+    d = _cartella(tmp_path)
+    (d / "storico.yaml").write_text("articoli:\n  '2580035': Elettromaniglie\n", encoding="utf-8")
+    st = Storico.carica(d)
+    st.collega(_documentazione(tmp_path), tmp_path / "prodotti.yaml")
+    assert st.prodotto_per("2580035")["prodotti"][0]["nome"] == "Elettromaniglie"
+    assert st.prodotto_per("40810N")["prodotti"][0]["schede"] == ["OPR031"]
+    assert st.prodotto_per("elettromaniglie")["prodotti"]
+    assert st.prodotto_per("9999999")["nota"]
+
+
+def test_testo_di_blocchi_claude():
+    from app.agente.servizio import testo_di
+    blocchi = [{"type": "thinking", "thinking": "..."}, {"type": "text", "text": "Risposta"}]
+    assert testo_di(blocchi) == "Risposta" and testo_di("ciao") == "ciao"

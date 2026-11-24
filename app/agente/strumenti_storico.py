@@ -26,3 +26,14 @@ def crea_strumenti_storico(storico: Storico) -> list:
         return storico.statistiche(prodotto, articolo)
 
     return [storico_riparazioni, statistiche_guasti]
+
+
+def crea_strumento_prodotto(storico: Storico) -> list:
+    @tool
+    def cerca_prodotto(testo: str) -> dict:
+        """Trova il prodotto della documentazione (e le sue schede) da un codice articolo (es. '40810N',
+        '2480035') o da parte del nome (es. 'elettropistone', 'arca'). Usalo per primo quando il tecnico
+        indica un codice articolo o un nome commerciale."""
+        return storico.prodotto_per(testo)
+
+    return [cerca_prodotto]

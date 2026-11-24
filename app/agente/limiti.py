@@ -21,6 +21,9 @@ def accorcia(valore, max_lista: int = 25):
     return valore
 
 
+PIU_LUNGHI = {"panoramica_prodotti": 20000, "cerca_prodotto": 10000}
+
+
 def limita(strumenti: list, max_caratteri: int = MAX_CARATTERI) -> list:
     """Avvolge la funzione di ogni strumento: se il risultato è troppo lungo lo accorcia per gradi."""
     for t in strumenti:
@@ -29,12 +32,12 @@ def limita(strumenti: list, max_caratteri: int = MAX_CARATTERI) -> list:
             continue
 
         @functools.wraps(originale)
-        def avvolta(*a, _f=originale, **k):
+        def avvolta(*a, _f=originale, _max=PIU_LUNGHI.get(t.name, max_caratteri), **k):
             r = _f(*a, **k)
-            for n in (25, 12, 6, 3):
-                if len(json.dumps(r, ensure_ascii=False, default=str)) <= max_caratteri:
+            for n in (200 if _max > max_caratteri else 25, 25, 12, 6, 3):
+                r = accorcia(r, n) if n != 200 else r
+                if len(json.dumps(r, ensure_ascii=False, default=str)) <= _max:
                     return r
-                r = accorcia(r, n)
             return r
 
         t.func = avvolta

@@ -189,6 +189,7 @@ class Storico:
             for p in catalogo.prodotti:
                 testi[p.nome] = p.nome.upper()
                 schede_di[p.nome] = list(p.schede)
+        self._indice, self._testi, self._schede_di = indice, testi, schede_di
         collegate, sconosciuti = 0, Counter()
         for r in self.riparazioni:
             r.prodotto = self._prodotto_di(r.articolo, indice, testi)
@@ -230,6 +231,19 @@ class Storico:
             return ""
         trovati.sort(reverse=True)
         return trovati[0][1] if len(trovati) == 1 or trovati[0][0] > trovati[1][0] else ""
+
+    def prodotto_per(self, testo: str) -> dict:
+        """Prodotto della documentazione per un codice articolo o un nome (anche parziale)."""
+        indice, testi = getattr(self, "_indice", {}), getattr(self, "_testi", {})
+        trovato = self._prodotto_di(testo, indice, testi)
+        parole = [w for w in re.split(r"\W+", testo.lower()) if len(w) > 2]
+        per_nome = [n for n in testi if parole and all(w in n.lower() for w in parole)]
+        candidati = list(dict.fromkeys(([trovato] if trovato else []) + per_nome))
+        return {"cercato": testo, "prodotti": [{"nome": n, "schede": self._schede_di.get(n, [])}
+                                               for n in candidati] if hasattr(self, "_schede_di") else candidati,
+                "nota": None if candidati else "codice non associato a un prodotto: chiedere al tecnico il nome del "
+                                                "prodotto o il codice scheda (OPR...), e aggiungerlo in "
+                                                "storico/storico.yaml alla voce 'articoli'"}
 
     # --- consultazione ----------------------------------------------------------------------------------------
     def _filtra(self, prodotto: str = "", articolo: str = "", seriale: str = "") -> list[Riparazione]:

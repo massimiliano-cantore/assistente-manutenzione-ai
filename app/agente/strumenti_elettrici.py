@@ -20,9 +20,14 @@ def _pin(rif: str) -> str:
 def crea_strumenti_elettrici(catalogo: Catalogo, datasheet: ServizioDatasheet | None, cartella_immagini: Path) -> list:
     @tool
     def panoramica_prodotti() -> dict:
-        """Elenca i prodotti, le schede che li compongono, come sono collegate e le note di revisione.
-        Usalo all'inizio per capire su quale scheda si trova la funzione guasta."""
-        return catalogo.panoramica()
+        """Elenca tutti i prodotti con le schede che li compongono e come sono collegate.
+        Usalo all'inizio per capire su quale scheda si trova la funzione guasta; per un codice articolo usa
+        prima cerca_prodotto."""
+        p = catalogo.panoramica()
+        nomi = {s["codice"]: s.get("nome") or "" for s in p["schede"]}
+        return {"prodotti": [{"nome": x["nome"], "schede": [f"{c} {nomi.get(c, '')}".strip() for c in x["schede"]],
+                              **({"collegamenti": x["collegamenti"]} if x["collegamenti"] else {})}
+                             for x in p["prodotti"]]}
 
     @tool
     def cerca_componenti(testo: str, scheda: str = "") -> dict:

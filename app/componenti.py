@@ -13,7 +13,7 @@ from app.agente.servizio import Assistente
 from app.agente.strumenti import crea_strumenti
 from app.agente.strumenti_elettrici import crea_strumenti_elettrici
 from app.agente.strumenti_firmware import crea_strumenti_firmware
-from app.agente.strumenti_storico import crea_strumenti_storico
+from app.agente.strumenti_storico import crea_strumenti_storico, crea_strumento_prodotto
 from app.cmms.api import crea_app as crea_app_cmms
 from app.cmms.client import ClienteCMMS
 from app.cmms.store import CMMSStore
@@ -57,14 +57,16 @@ def _componenti_azienda(cfg: Config, llm, kb, catalogo, datasheet) -> Componenti
     if kb.sezioni:   # istruzioni e manuali dell'azienda, se presenti nella cartella documenti/
         strumenti = [s for s in crea_strumenti(None, kb, None) if s.name == "cerca_manuale"] + strumenti
     extra = {"estrattore": estrattore_llm}
+    from app.storico import Storico
     cartella_storico = cfg.dati_azienda / "storico"
-    if cartella_storico.exists():   # schede di riparazione esportate da Document AI
-        from app.storico import Storico
-        storico = Storico.carica(cartella_storico)
-        if storico.riparazioni:
-            extra["storico"] = storico
-            extra["storico_collegamento"] = storico.collega(catalogo, cfg.dati_azienda / "prodotti.yaml")
-            strumenti = crea_strumenti_storico(storico) + strumenti
+    # anche senza schede di riparazione serve per ritrovare un prodotto dal codice articolo (storico.yaml)
+    storico = Storico.carica(cartella_storico) if cartella_storico.exists() else Storico([])
+    collegamento = storico.collega(catalogo, cfg.dati_azienda / "prodotti.yaml")
+    strumenti = crea_strumento_prodotto(storico) + strumenti
+    if storico.riparazioni:   # schede di riparazione esportate da Document AI
+        extra["storico"] = storico
+        extra["storico_collegamento"] = collegamento
+        strumenti = crea_strumenti_storico(storico) + strumenti
     from app.agente.limiti import limita
     return Componenti(cfg, None, kb, None, limita(strumenti), None, catalogo, datasheet, extra)
 

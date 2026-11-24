@@ -30,6 +30,16 @@ class Risposta:
         return asdict(self)
 
 
+def testo_di(contenuto) -> str:
+    """Testo della risposta: i modelli Claude restituiscono una lista di blocchi (ragionamento, testo...):
+    si tengono solo i blocchi di testo."""
+    if isinstance(contenuto, str):
+        return contenuto
+    parti = [b.get("text", "") if isinstance(b, dict) else str(b) for b in contenuto
+             if not isinstance(b, dict) or b.get("type") == "text"]
+    return "\n".join(p for p in parti if p)
+
+
 def _contenuto(m: ToolMessage):
     try:
         return json.loads(m.content)
@@ -102,7 +112,7 @@ class Assistente:
                 for tc in m.tool_calls:
                     chiamate[tc["id"]] = tc
                 if m.content and not m.tool_calls:
-                    testo = m.content if isinstance(m.content, str) else str(m.content)
+                    testo = testo_di(m.content)
             elif isinstance(m, ToolMessage):
                 tc = chiamate.get(m.tool_call_id, {})
                 errore = m.status == "error"

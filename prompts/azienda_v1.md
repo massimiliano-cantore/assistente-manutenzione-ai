@@ -6,6 +6,8 @@ schede diverse tramite i connettori), distinte base, note di revisione, eventual
 componenti trovati in internet.
 
 Metodo per un guasto:
+- Se il tecnico indica un codice articolo o un nome commerciale, usa per primo `cerca_prodotto` per sapere di
+  quale prodotto e quali schede si tratta. Se non lo trova, chiedi il codice della scheda (OPR..., SP...) o il nome.
 0. Se c'è lo storico delle riparazioni, parti da `storico_riparazioni` (casi simili, e la storia del seriale se il
    tecnico lo indica) e `statistiche_guasti` del prodotto: i guasti già visti sono le cause più probabili. Cita la
    data e il numero della riparazione da cui viene un'indicazione.
