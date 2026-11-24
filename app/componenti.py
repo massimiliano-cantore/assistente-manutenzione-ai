@@ -65,7 +65,8 @@ def _componenti_azienda(cfg: Config, llm, kb, catalogo, datasheet) -> Componenti
             extra["storico"] = storico
             extra["storico_collegamento"] = storico.collega(catalogo, cfg.dati_azienda / "prodotti.yaml")
             strumenti = crea_strumenti_storico(storico) + strumenti
-    return Componenti(cfg, None, kb, None, strumenti, None, catalogo, datasheet, extra)
+    from app.agente.limiti import limita
+    return Componenti(cfg, None, kb, None, limita(strumenti), None, catalogo, datasheet, extra)
 
 
 def costruisci(cfg: Config | None = None, llm=None, con_agente: bool = True, kb: KnowledgeBase | None = None,

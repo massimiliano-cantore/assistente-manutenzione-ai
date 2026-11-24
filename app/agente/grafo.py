@@ -22,9 +22,15 @@ def crea_llm(cfg, strumenti: list):
     if not cfg.api_key:
         raise RuntimeError(f"manca la chiave API: imposta {cfg.provider.upper()}_API_KEY (o LLM_API_KEY)")
 
+    riserve_presenti = any(m != cfg.modello for m in cfg.alternative)
+
     def modello(nome: str):
+        # con modelli di riserva non si aspetta: al limite di richieste (429) si passa subito al modello successivo,
+        # che su Groq ha un limite suo
+        tentativi = 0 if riserve_presenti else 2
         return ChatOpenAI(model=nome, base_url=cfg.base_url, api_key=cfg.api_key, temperature=cfg.temperatura,
-                          max_retries=2, timeout=900 if cfg.provider == "ollama" else 60).bind_tools(strumenti)
+                          max_retries=tentativi, timeout=900 if cfg.provider == "ollama" else 60
+                          ).bind_tools(strumenti)
 
     principale = modello(cfg.modello)
     riserve = [modello(m) for m in cfg.alternative if m != cfg.modello]

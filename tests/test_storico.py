@@ -92,3 +92,17 @@ def test_articolo_a_mano(tmp_path: Path):
     (d / "storico.yaml").write_text("articoli:\n  '99999': Elettromaniglie\n", encoding="utf-8")
     st = Storico.carica(d)
     assert st.collega(_documentazione(tmp_path), tmp_path / "prodotti.yaml")["collegate_a_prodotto"] == 4
+
+
+def test_limiti_risultati():
+    from langchain_core.tools import tool
+
+    from app.agente.limiti import limita
+
+    @tool
+    def tanti() -> dict:
+        """prova"""
+        return {"pin": [{"n": i, "testo": "x" * 200} for i in range(200)]}
+
+    r = limita([tanti], max_caratteri=3000)[0].invoke({})
+    assert len(r["pin"]) <= 13 and str(r["pin"][-1]).startswith("... e altri")
