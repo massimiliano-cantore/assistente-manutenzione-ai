@@ -8,7 +8,7 @@ llm:
   # i modelli gratuiti cambiano spesso: se il primo non è disponibile si prova il successivo
   alternative: [llama-3.3-70b-versatile, qwen/qwen3-32b, openai/gpt-oss-20b]
   temperatura: 0
-  max_passi: 8                 # limite al ciclo agente -> strumenti
+  max_passi: 15                # limite al ciclo agente -> strumenti (poi risponde con quello che ha)
 
 rag:
   embedder: fastembed          # fastembed (denso, multilingue) | tfidf (locale, senza download: test e CI veloce)

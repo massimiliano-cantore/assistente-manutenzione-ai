@@ -45,3 +45,14 @@ def test_storico_collegato_all_agente(cfg, tmp_path):
     assert {"storico_riparazioni", "statistiche_guasti"} <= {s.name for s in c.strumenti}
     r = c.assistente.chiedi("La radio è muta")
     assert r.passi[0]["esito"]["casi"][0]["note"] == "radio muta, sostituita R10"
+
+
+def test_limite_passi_risponde_comunque(cfg, tmp_path):
+    (tmp_path / "azienda").mkdir()
+    azienda = cartella_azienda(tmp_path / "azienda")
+    c_cfg = dataclasses.replace(cfg, dati_azienda=azienda, cartella_immagini=tmp_path / "img", max_passi=2)
+    llm = LLMCopione(copione=[chiamata("panoramica_prodotti", f"p{i}") for i in range(3)]
+                     + [testo("Risposta con i dati raccolti. Misure da fare: ...")])
+    c = costruisci(c_cfg, llm=llm)
+    r = c.assistente.chiedi("guasto qualsiasi")
+    assert r.testo.startswith("Risposta con i dati raccolti")

@@ -11,6 +11,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langgraph.errors import GraphRecursionError
 from langgraph.types import Command
 
 from app.osservabilita import CONFERME, RICHIESTE, STRUMENTI, TOKEN, Cronometro, callback_tracciamento
@@ -83,7 +84,10 @@ class Assistente:
         prima = len(self.grafo.get_state(cfg).values.get("messages", []))
         try:
             with Cronometro() as c:
-                self.grafo.invoke(ingresso, cfg)
+                try:
+                    self.grafo.invoke(ingresso, cfg)
+                except GraphRecursionError:
+                    self._chiudi_con_quello_che_ha(cfg)
         except Exception as e:
             RICHIESTE.labels("errore").inc()
             log.exception("turno fallito", extra={"evento": {"thread_id": thread_id, "errore": str(e)[:300]}})
@@ -100,6 +104,20 @@ class Assistente:
             "thread_id": thread_id, "secondi": r.secondi, "strumenti": [p["strumento"] for p in passi],
             "in_attesa": bool(attesa), **self.firma}})
         return r
+
+    def _chiudi_con_quello_che_ha(self, cfg: dict) -> None:
+        """Limite di consultazioni raggiunto: invece di un errore si chiede la risposta con i dati già raccolti.
+        Le chiamate a strumenti rimaste senza risultato ricevono un risultato 'non eseguito' (i modelli lo
+        richiedono), poi un messaggio chiede di rispondere senza altri strumenti."""
+        stato = self.grafo.get_state(cfg).values.get("messages", [])
+        fatti = {m.tool_call_id for m in stato if isinstance(m, ToolMessage)}
+        sospesi = [tc for m in stato if isinstance(m, AIMessage) for tc in m.tool_calls if tc["id"] not in fatti]
+        chiusure = [ToolMessage("non eseguito: raggiunto il limite di consultazioni", tool_call_id=tc["id"],
+                                name=tc["name"]) for tc in sospesi]
+        nota = HumanMessage("Hai raggiunto il limite di consultazioni per questa domanda. Non usare altri strumenti: "
+                            "scrivi ora la risposta con i dati che hai, indica cosa resta da verificare e chiudi "
+                            "con le misure da fare.")
+        self.grafo.invoke({"messages": chiusure + [nota]}, {**cfg, "recursion_limit": 4})
 
     @staticmethod
     def _passi(messaggi) -> tuple[list[dict], str]:
