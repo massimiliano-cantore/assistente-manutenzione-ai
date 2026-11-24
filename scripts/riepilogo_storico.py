@@ -42,7 +42,8 @@ def main() -> None:
         if prodotto.startswith("(articolo"):
             continue
         st = s.statistiche(prodotto)
-        righe += ["", f"== {prodotto}: {st['riparazioni']} riparazioni, tempo medio {st['tempo_medio_minuti']} min"]
+        tempo = f"{st['tempo_medio_minuti']} min" if st["tempo_medio_minuti"] else "non indicato"
+        righe += ["", f"== {prodotto}: {st['riparazioni']} riparazioni, tempo medio {tempo}"]
         righe.append("  più sostituiti: " + "; ".join(f"{k} ({n})" for k, n in st["componenti_piu_sostituiti"][:6]))
         if st["riferimenti_schema_citati"]:
             righe.append("  componenti dello schema citati: " + ", ".join(f"{k} ({n})"
