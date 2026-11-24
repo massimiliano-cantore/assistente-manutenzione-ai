@@ -27,7 +27,7 @@ def test_diagnosi_con_strumenti_elettrici(cfg, tmp_path):
                                                  "evidenzia_su_disegno"]
     assert r.passi[2]["esito"]["componenti_attraversati"] == ["R10"]
     assert (tmp_path / "img" / r.passi[3]["esito"]["immagine"]).exists()
-    assert "laboratorio riparazioni" in llm.ricevuti[0][0].content and "Misure da fare" in llm.ricevuti[0][0].content
+    assert "laboratorio riparazioni" in llm.ricevuti[0][0].content and "BREVE" in llm.ricevuti[0][0].content
 
 
 def test_storico_collegato_all_agente(cfg, tmp_path):
