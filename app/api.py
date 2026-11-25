@@ -8,14 +8,15 @@ GET  /metrics        metriche Prometheus
 """
 from __future__ import annotations
 
+import html
 import mimetypes
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
@@ -99,22 +100,36 @@ def crea_app(componenti: Componenti | None = None, frontend: Path | None = FRONT
         return _indice().cerca(q[:200])
 
     @app.get("/api/documenti/apri")
-    def apri_documento(p: str):
+    def apri_documento(p: str, request: Request):
+        from app.documenti import converti as cv
         radice = _indice().radice.resolve()
         f = (radice / p).resolve()
         if not f.is_file() or radice not in f.parents:   # solo file dentro la cartella dei documenti
             raise HTTPException(404)
-        from app.documenti.converti import DA_CONVERTIRE, in_pdf
-        modo = "inline"
-        if f.suffix.lower() in DA_CONVERTIRE:      # il browser non li mostra: PDF con LibreOffice, se c'è
-            pdf = in_pdf(f, Path(app.state.c.cfg.dati_azienda or radice) / ".cache" / "pdf_documenti")
-            if pdf:
-                f = pdf
-            else:
-                modo = "attachment"                  # si scarica e si apre con il programma del PC
-        tipo = mimetypes.guess_type(f.name)[0] or "application/octet-stream"
-        intestazioni = {"Content-Disposition": f'{modo}; filename="{f.name.encode("ascii", "replace").decode()}"'}
-        return FileResponse(f, media_type=tipo, headers=intestazioni)
+        cache = Path(app.state.c.cfg.dati_azienda or radice) / ".cache" / "documenti_aperti"
+        est = f.suffix.lower()
+        tipo = None
+        if est in cv.DA_CONVERTIRE:
+            f = cv.in_pdf(f, cache) or f
+        elif est in cv.IMMAGINI_DA_CONVERTIRE:
+            f = cv.in_png(f, cache) or f
+        elif est in cv.COME_TESTO:
+            tipo = "text/plain; charset=utf-8"
+        if f.suffix.lower() not in cv.NEL_BROWSER and not tipo:
+            # formato che il browser non sa mostrare (Altium, CAD, ...): se il browser è sul PC del server
+            # lo si apre con il programma installato, altrimenti si scarica
+            nome = f.name.encode("ascii", "replace").decode()
+            if request.client and request.client.host in ("127.0.0.1", "::1", "localhost") and cv.apri_sul_pc(f):
+                return HTMLResponse(f"<p style='font-family:sans-serif'>Aperto <b>{html.escape(f.name)}</b> "
+                                    "con il programma del PC. Puoi chiudere questa scheda.</p>"
+                                    "<script>setTimeout(()=>window.close(),1500)</script>")
+            return FileResponse(f, media_type="application/octet-stream",
+                                headers={"Content-Disposition": f'attachment; filename="{nome}"'})
+        tipo = tipo or mimetypes.guess_type(f.name)[0] or "application/octet-stream"
+        if tipo.startswith("text/") and "charset" not in tipo:
+            tipo += "; charset=utf-8"
+        nome = f.name.encode("ascii", "replace").decode()
+        return FileResponse(f, media_type=tipo, headers={"Content-Disposition": f'inline; filename="{nome}"'})
 
     @app.get("/metrics")
     def metriche():
