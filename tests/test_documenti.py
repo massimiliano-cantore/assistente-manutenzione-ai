@@ -78,3 +78,16 @@ def test_api_ricerca_e_apertura(tmp_path: Path, cfg):
         a = cl.get("/api/documenti/apri", params={"p": p})
         assert a.status_code == 200 and "2480035" in a.text
         assert cl.get("/api/documenti/apri", params={"p": "../../etc/passwd"}).status_code == 404
+
+
+def test_cartella_documenti_separata(tmp_path):
+    from app.documenti.indice import IndiceDocumenti
+    prod = tmp_path / "Produzione1"
+    prod.mkdir()
+    doc = tmp_path / "Documenti condivisi" / "Varie"
+    doc.mkdir(parents=True)
+    (doc / "Istruzioni montaggio 4000123.txt").write_text("articolo 4000123 montaggio", encoding="utf-8")
+    IndiceDocumenti(prod / "indice_documenti.db", tmp_path / "Documenti condivisi").aggiorna()
+    i = IndiceDocumenti(prod / "indice_documenti.db")        # riapertura: cartella letta dall'indice
+    assert i.radice == tmp_path / "Documenti condivisi"
+    assert i.cerca("4000123")["istruzioni"]

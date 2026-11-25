@@ -153,26 +153,38 @@ def gruppo(nome: str) -> str:
 # --- indice ----------------------------------------------------------------------------------------------------
 
 class IndiceDocumenti:
-    def __init__(self, file_db: str | Path, radice: str | Path):
-        self.radice = Path(radice)
+    def __init__(self, file_db: str | Path, radice: str | Path | None = None):
+        """radice: cartella da indicizzare; se manca si usa quella registrata nell'indice."""
         self.db = sqlite3.connect(str(file_db), check_same_thread=False)
         self.db.executescript("""
+            CREATE TABLE IF NOT EXISTS impostazioni(chiave TEXT PRIMARY KEY, valore TEXT);
             CREATE TABLE IF NOT EXISTS meta(percorso TEXT PRIMARY KEY, dimensione INTEGER, mtime REAL, nome TEXT,
                 titolo TEXT, data TEXT, categoria TEXT, prodotto TEXT, gruppo TEXT, estensione TEXT, estratto TEXT);
             CREATE VIRTUAL TABLE IF NOT EXISTS testi USING fts5(percorso UNINDEXED, titolo, cartelle, testo,
                 tokenize = "unicode61 remove_diacritics 2");
         """)
+        registrata = self.db.execute("SELECT valore FROM impostazioni WHERE chiave='radice'").fetchone()
+        if radice is None:
+            if not registrata:
+                raise ValueError("indice senza cartella registrata: ricostruiscilo con scripts.indicizza_documenti")
+            radice = registrata[0]
+        elif registrata and Path(registrata[0]).resolve() != Path(radice).resolve():
+            self.db.executescript("DELETE FROM meta; DELETE FROM testi;")   # cambiata cartella: si riparte
+        self.radice = Path(radice)
+        self.db.execute("INSERT OR REPLACE INTO impostazioni VALUES ('radice', ?)", (str(self.radice),))
+        self.db.commit()
 
     def aggiorna(self, schemi_noti: set[str] | None = None, avanzamento=None) -> dict:
         """Indicizza i file nuovi o modificati e toglie quelli spariti."""
         schemi_noti = schemi_noti or set()
+        salta_radice = (self.radice / "prodotti.yaml").exists()
         visti, nuovi, errori = set(), 0, 0
         presenti = {p: (d, m) for p, d, m in self.db.execute("SELECT percorso, dimensione, mtime FROM meta")}
         for f in sorted(self.radice.rglob("*")):
             rel_parti = f.relative_to(self.radice).parts
             if not f.is_file() or any(p.startswith(".") or p in CARTELLE_ESCLUSE for p in rel_parti):
                 continue
-            if f.parent == self.radice:          # rapporti e configurazioni dell'assistente
+            if f.parent == self.radice and salta_radice:   # rapporti e configurazioni dell'assistente
                 continue
             rel = "/".join(rel_parti)
             visti.add(rel)
@@ -268,11 +280,21 @@ class IndiceDocumenti:
         return {"documenti": sum(per.values()), **per}
 
 
-def schemi_da_prodotti_yaml(radice: Path) -> set[str]:
-    """I PDF che lo scanner ha riconosciuto come schemi Altium sono schemi con certezza."""
+def schemi_da_prodotti_yaml(radice: Path, radice_indice: Path | None = None) -> set[str]:
+    """I PDF che lo scanner ha riconosciuto come schemi Altium sono schemi con certezza.
+    Percorsi resi relativi a radice_indice (la cartella indicizzata), se diversa da quella di prodotti.yaml."""
     import yaml
     f = radice / "prodotti.yaml"
     if not f.exists():
         return set()
     conf = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
-    return {str(v[k]).replace("\\", "/") for v in conf.get("schede", []) for k in ("netlist", "disegno") if v.get(k)}
+    rel = {str(v[k]).replace("\\", "/") for v in conf.get("schede", []) for k in ("netlist", "disegno") if v.get(k)}
+    if radice_indice is None or Path(radice_indice).resolve() == Path(radice).resolve():
+        return rel
+    out, base = set(), Path(radice_indice).resolve()
+    for r in rel:
+        try:
+            out.add((Path(radice) / r).resolve().relative_to(base).as_posix())
+        except ValueError:
+            pass
+    return out

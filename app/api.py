@@ -87,7 +87,7 @@ def crea_app(componenti: Componenti | None = None, frontend: Path | None = FRONT
             if not f.exists():
                 raise HTTPException(503, "indice dei documenti non ancora costruito: lancia "
                                          "'python -m scripts.indicizza_documenti' o prepara_opera.bat")
-            c.extra["indice_documenti"] = IndiceDocumenti(f, c.cfg.dati_azienda)
+            c.extra["indice_documenti"] = IndiceDocumenti(f)   # cartella registrata nell'indice
         return c.extra["indice_documenti"]
 
     @app.get("/documenti")
@@ -100,11 +100,9 @@ def crea_app(componenti: Componenti | None = None, frontend: Path | None = FRONT
 
     @app.get("/api/documenti/apri")
     def apri_documento(p: str):
-        radice = app.state.c.cfg.dati_azienda
-        if not radice:
-            raise HTTPException(404)
+        radice = _indice().radice.resolve()
         f = (radice / p).resolve()
-        if not f.is_file() or radice.resolve() not in f.parents:   # solo file dentro la cartella dei documenti
+        if not f.is_file() or radice not in f.parents:   # solo file dentro la cartella dei documenti
             raise HTTPException(404)
         tipo = mimetypes.guess_type(f.name)[0] or "application/octet-stream"
         intestazioni = {"Content-Disposition": f'inline; filename="{f.name.encode("ascii", "replace").decode()}"'}
