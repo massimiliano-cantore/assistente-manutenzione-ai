@@ -106,9 +106,10 @@ def crea_app(componenti: Componenti | None = None, frontend: Path | None = FRONT
     @app.get("/api/documenti/apri")
     def apri_documento(p: str, request: Request):
         from app.documenti import converti as cv
-        radice = _indice().radice.resolve()
-        f = (radice / p).resolve()
-        if not f.is_file() or radice not in f.parents:   # solo file dentro la cartella dei documenti
+        indice = _indice()
+        radice = indice.radice
+        f = indice.file_di(p)          # solo file dentro le cartelle indicizzate
+        if f is None:
             raise HTTPException(404)
         cache = Path(app.state.c.cfg.dati_azienda or radice) / ".cache" / "documenti_aperti"
         est = f.suffix.lower()

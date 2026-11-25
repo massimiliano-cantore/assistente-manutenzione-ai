@@ -203,29 +203,34 @@ class IndiceDocumenti:
         salta_radice = (self.radice / "prodotti.yaml").exists()
         visti, nuovi, errori = set(), 0, 0
         presenti = {p: (d, m) for p, d, m in self.db.execute("SELECT percorso, dimensione, mtime FROM meta")}
-        if cartelle is None:
-            file_da_leggere = self.radice.rglob("*")
-        else:
-            file_da_leggere = (f for c in dict.fromkeys(cartelle) for f in (self.radice / c).rglob("*"))
-        for f in sorted(set(file_da_leggere)):
-            rel_parti = f.relative_to(self.radice).parts
-            if not f.is_file() or any(p.startswith(".") or p in CARTELLE_ESCLUSE for p in rel_parti):
-                continue
-            if f.parent == self.radice and salta_radice:   # rapporti e configurazioni dell'assistente
-                continue
-            rel = "/".join(rel_parti)
-            visti.add(rel)
-            st = f.stat()
-            if presenti.get(rel) == (st.st_size, st.st_mtime):
-                continue
-            try:
-                self._indicizza(f, rel, st, schemi_noti)
-                nuovi += 1
-            except Exception as e:  # noqa: BLE001
-                errori += 1
-                log.warning("non indicizzato %s: %s", rel, e)
-            if avanzamento and nuovi % 200 == 0 and nuovi:
-                avanzamento(nuovi)
+        cartelle_abs = [self.radice] if cartelle is None else [self.radice / c for c in dict.fromkeys(cartelle)]
+        self.registra_cartelle(cartelle_abs)
+        base = self.radice.resolve()
+        for c in cartelle_abs:
+            for f in sorted(c.rglob("*")):
+                rel_parti = f.relative_to(c).parts
+                if not f.is_file() or any(p.startswith(".") or p in CARTELLE_ESCLUSE for p in rel_parti):
+                    continue
+                if f.parent == self.radice and salta_radice:   # rapporti e configurazioni dell'assistente
+                    continue
+                try:      # dentro la cartella principale: percorso relativo; altrove: percorso completo
+                    rel = f.resolve().relative_to(base).as_posix()
+                except ValueError:
+                    rel = f.resolve().as_posix()
+                if rel in visti:
+                    continue
+                visti.add(rel)
+                st = f.stat()
+                if presenti.get(rel) == (st.st_size, st.st_mtime):
+                    continue
+                try:
+                    self._indicizza(f, rel, st, schemi_noti)
+                    nuovi += 1
+                except Exception as e:  # noqa: BLE001
+                    errori += 1
+                    log.warning("non indicizzato %s: %s", rel, e)
+                if avanzamento and nuovi % 200 == 0 and nuovi:
+                    avanzamento(nuovi)
         spariti = set(presenti) - visti
         for p in spariti:
             self.db.execute("DELETE FROM meta WHERE percorso=?", (p,))
@@ -233,9 +238,28 @@ class IndiceDocumenti:
         self.db.commit()
         return {"documenti": len(visti), "indicizzati_ora": nuovi, "rimossi": len(spariti), "errori": errori}
 
+    def registra_cartelle(self, cartelle: list[Path]) -> None:
+        import json
+        self.db.execute("INSERT OR REPLACE INTO impostazioni VALUES ('cartelle', ?)",
+                        (json.dumps([str(Path(c).resolve()) for c in cartelle]),))
+
+    def cartelle_consentite(self) -> list[Path]:
+        """Cartelle i cui file si possono aprire dai link: la principale più quelle indicizzate."""
+        import json
+        r = self.db.execute("SELECT valore FROM impostazioni WHERE chiave='cartelle'").fetchone()
+        return [self.radice.resolve()] + [Path(c) for c in (json.loads(r[0]) if r else [])]
+
+    def file_di(self, percorso: str) -> Path | None:
+        """File su disco per un percorso dell'indice, solo se sta in una cartella consentita."""
+        p = Path(percorso)
+        f = (p if p.is_absolute() else self.radice / p).resolve()
+        if f.is_file() and any(c == f or c in f.parents for c in self.cartelle_consentite()):
+            return f
+        return None
+
     def _indicizza(self, f: Path, rel: str, st, schemi_noti: set[str]) -> None:
         testo = estrai_testo(f)
-        prodotto = rel.split("/", 1)[0]
+        prodotto = rel.split("/", 1)[0] if not Path(rel).is_absolute() else f.parent.name
         doc = Documento(rel, f.name, titolo_documento(testo, f), data_documento(testo, f),
                         categoria(rel, testo, schemi_noti), prodotto, gruppo(f.name), f.suffix.lower().lstrip("."),
                         re.sub(r"\s+", " ", testo[:400]).strip()[:200])
@@ -329,7 +353,7 @@ def schemi_da_prodotti_yaml(radice: Path, radice_indice: Path | None = None) -> 
 
 def leggi_elenco_cartelle(file: Path, radice: Path) -> list[str]:
     """Una sottocartella per riga (relativa alla radice o percorso completo); # per i commenti.
-    Restituisce i percorsi relativi validi; avvisa per quelli inesistenti o fuori dalla radice."""
+    Restituisce i percorsi validi (relativi alla radice, o completi se altrove); avvisa per quelli inesistenti."""
     out = []
     for riga in file.read_text(encoding="utf-8-sig").splitlines():
         riga = riga.split("#", 1)[0].strip().strip('"').rstrip("\\/")
@@ -337,13 +361,11 @@ def leggi_elenco_cartelle(file: Path, radice: Path) -> list[str]:
             continue
         c = Path(riga)
         c = c if c.is_absolute() else radice / c
-        try:
-            rel = c.resolve().relative_to(radice.resolve())
-        except ValueError:
-            log.warning("cartella fuori da %s, saltata: %s", radice, riga)
-            continue
         if not c.is_dir():
             log.warning("cartella non trovata, saltata: %s (cercata in %s)", riga, c)
             continue
-        out.append(rel.as_posix())
+        try:
+            out.append(c.resolve().relative_to(radice.resolve()).as_posix())
+        except ValueError:
+            out.append(str(c.resolve()))      # cartella in un'altra posizione: percorso completo
     return out

@@ -114,3 +114,20 @@ def test_testo_odg(tmp_path):
     with zipfile.ZipFile(f, "w") as z:
         z.writestr("content.xml", "<office:document-content><text:p>Staffa 4000555</text:p></office:document-content>")
     assert "Staffa 4000555" in estrai_testo(f)
+
+
+def test_cartelle_in_altre_posizioni(tmp_path):
+    from app.documenti.indice import IndiceDocumenti, leggi_elenco_cartelle
+    condivisi, altrove = tmp_path / "condivisi", tmp_path / "altro_disco" / "Manuali"
+    (condivisi / "Prodotti").mkdir(parents=True)
+    altrove.mkdir(parents=True)
+    (condivisi / "Prodotti" / "a.txt").write_text("articolo 4000777", encoding="utf-8")
+    (altrove / "Manuale 4000777.txt").write_text("articolo 4000777", encoding="utf-8")
+    elenco = tmp_path / "elenco.txt"
+    elenco.write_text(f"Prodotti\n{altrove}\n", encoding="utf-8")
+    i = IndiceDocumenti(tmp_path / "i.db", condivisi)
+    assert i.aggiorna(cartelle=leggi_elenco_cartelle(elenco, condivisi))["documenti"] == 2
+    r = i.cerca("4000777")
+    percorsi = [d["percorso"] for k in ("istruzioni", "schemi", "altri") for d in r[k]]
+    assert len(percorsi) == 2 and all(i.file_di(p) for p in percorsi)
+    assert i.file_di(str(tmp_path / "elenco.txt")) is None          # fuori dalle cartelle: non si apre
