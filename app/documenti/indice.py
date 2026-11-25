@@ -90,8 +90,18 @@ def _testo_semplice(f: Path) -> str:
     return dati.decode("latin-1", "replace")
 
 
+def _testo_odf(f: Path) -> str:
+    """Documenti LibreOffice (odg, odt, ods, odp): il testo sta in content.xml dentro lo zip."""
+    import zipfile
+    with zipfile.ZipFile(f) as z:
+        xml = z.read("content.xml").decode("utf-8", "replace")
+    xml = re.sub(r"</text:(p|h)>|<text:line-break/>|<text:tab/>", "\n", xml)
+    return re.sub(r"<[^>]+>", " ", xml).replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+
+
 LETTORI = {".pdf": _testo_pdf, ".docx": _testo_docx, ".xlsx": _testo_excel, ".xls": _testo_excel,
-           ".xlsm": _testo_excel, ".txt": _testo_semplice, ".md": _testo_semplice, ".csv": _testo_semplice}
+           ".xlsm": _testo_excel, ".txt": _testo_semplice, ".md": _testo_semplice, ".csv": _testo_semplice,
+           ".odg": _testo_odf, ".odt": _testo_odf, ".ods": _testo_odf, ".odp": _testo_odf}
 
 
 def estrai_testo(f: Path) -> str:
@@ -152,6 +162,9 @@ def gruppo(nome: str) -> str:
 
 # --- indice ----------------------------------------------------------------------------------------------------
 
+VERSIONE_INDICE = 2
+
+
 class IndiceDocumenti:
     def __init__(self, file_db: str | Path, radice: str | Path | None = None):
         """radice: cartella da indicizzare; se manca si usa quella registrata nell'indice."""
@@ -171,6 +184,14 @@ class IndiceDocumenti:
         elif registrata and Path(registrata[0]).resolve() != Path(radice).resolve():
             self.db.executescript("DELETE FROM meta; DELETE FROM testi;")   # cambiata cartella: si riparte
         self.radice = Path(radice)
+        versione = self.db.execute("SELECT valore FROM impostazioni WHERE chiave='versione'").fetchone()
+        if not versione or int(versione[0]) < VERSIONE_INDICE:   # file LibreOffice prima senza testo: si rileggono
+            vecchi = [r[0] for r in self.db.execute(
+                "SELECT percorso FROM meta WHERE estensione IN ('odg','odt','ods','odp')")]
+            for v in vecchi:
+                self.db.execute("DELETE FROM meta WHERE percorso=?", (v,))
+                self.db.execute("DELETE FROM testi WHERE percorso=?", (v,))
+            self.db.execute("INSERT OR REPLACE INTO impostazioni VALUES ('versione', ?)", (str(VERSIONE_INDICE),))
         self.db.execute("INSERT OR REPLACE INTO impostazioni VALUES ('radice', ?)", (str(self.radice),))
         self.db.commit()
 

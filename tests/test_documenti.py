@@ -104,3 +104,13 @@ def test_solo_cartelle_elencate(tmp_path):
     assert cartelle == ["Prodotti"]
     i = IndiceDocumenti(tmp_path / "i.db", tmp_path)
     assert i.aggiorna(cartelle=cartelle)["documenti"] == 1
+
+
+def test_testo_odg(tmp_path):
+    import zipfile
+
+    from app.documenti.indice import estrai_testo
+    f = tmp_path / "disegno.odg"
+    with zipfile.ZipFile(f, "w") as z:
+        z.writestr("content.xml", "<office:document-content><text:p>Staffa 4000555</text:p></office:document-content>")
+    assert "Staffa 4000555" in estrai_testo(f)

@@ -104,8 +104,16 @@ def crea_app(componenti: Componenti | None = None, frontend: Path | None = FRONT
         f = (radice / p).resolve()
         if not f.is_file() or radice not in f.parents:   # solo file dentro la cartella dei documenti
             raise HTTPException(404)
+        from app.documenti.converti import DA_CONVERTIRE, in_pdf
+        modo = "inline"
+        if f.suffix.lower() in DA_CONVERTIRE:      # il browser non li mostra: PDF con LibreOffice, se c'è
+            pdf = in_pdf(f, Path(app.state.c.cfg.dati_azienda or radice) / ".cache" / "pdf_documenti")
+            if pdf:
+                f = pdf
+            else:
+                modo = "attachment"                  # si scarica e si apre con il programma del PC
         tipo = mimetypes.guess_type(f.name)[0] or "application/octet-stream"
-        intestazioni = {"Content-Disposition": f'inline; filename="{f.name.encode("ascii", "replace").decode()}"'}
+        intestazioni = {"Content-Disposition": f'{modo}; filename="{f.name.encode("ascii", "replace").decode()}"'}
         return FileResponse(f, media_type=tipo, headers=intestazioni)
 
     @app.get("/metrics")
