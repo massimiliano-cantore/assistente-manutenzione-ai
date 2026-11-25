@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="it"><head><meta charset="utf-8"><title>Cerca nei documenti</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{font-family:system-ui,Segoe UI,sans-serif;margin:0;background:#f6f7f9;color:#1d1f23}
+header{padding:28px 16px 12px;text-align:center}
+h1{font-size:22px;margin:0 0 14px;font-weight:600}
+form{display:flex;gap:8px;max-width:720px;margin:0 auto}
+input{flex:1;font:inherit;font-size:17px;padding:11px 16px;border:1px solid #c3c7cf;border-radius:24px;outline:none}
+input:focus{border-color:#1f5fbf;box-shadow:0 0 0 3px #1f5fbf22}
+button{font:inherit;padding:0 22px;border:0;border-radius:24px;background:#1f5fbf;color:#fff;cursor:pointer}
+#stato{text-align:center;color:#666;font-size:13px;margin:10px}
+main{max-width:1100px;margin:0 auto;padding:8px 16px 40px;display:grid;gap:16px}
+section{background:#fff;border:1px solid #e1e4e8;border-radius:10px;padding:14px 18px}
+section h2{font-size:15px;margin:0 0 10px;color:#1f5fbf}
+.doc{padding:7px 0;border-top:1px solid #f0f1f3;display:grid;grid-template-columns:1fr auto;gap:2px 12px}
+.doc:first-of-type{border-top:0}
+.doc a{color:#1a0dab;text-decoration:none;font-weight:500;word-break:break-word}
+.doc a:hover{text-decoration:underline}
+.data{color:#555;font-size:13px;white-space:nowrap}
+.dove{grid-column:1/3;color:#0b6b3a;font-size:12px;word-break:break-all}
+.ultima{display:inline-block;font-size:11px;background:#e5f3ea;color:#0b6b3a;border-radius:8px;padding:1px 7px;margin-left:6px}
+details{grid-column:1/3;font-size:13px;color:#555}
+details .doc{padding-left:14px}
+.vuoto{color:#888;font-size:14px}
+.altro{display:flex;justify-content:space-between;align-items:center}
+.nav{text-align:center;font-size:13px;margin-top:6px}.nav a{color:#1f5fbf}
+</style></head><body>
+<header>
+  <h1>Cerca nei documenti dei prodotti</h1>
+  <form id="f"><input id="q" placeholder="Articolo, codice, particolare o parte di parola (es. 40810, OPR030, nottolino)" autofocus>
+  <button>Cerca</button></form>
+  <div class="nav"><a href="/">Vai all'assistente tecnico</a></div>
+</header>
+<div id="stato"></div>
+<main id="r"></main>
+<script>
+const r = document.getElementById("r"), stato = document.getElementById("stato"), q = document.getElementById("q");
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const link = d => `/api/documenti/apri?p=${encodeURIComponent(d.percorso)}`;
+const data = d => d.data ? d.data.split("-").reverse().join("/") : "";
+function riga(d, ultima) {
+  let h = `<div class="doc"><div><a href="${link(d)}" target="_blank">${esc(d.titolo)}</a>${ultima ? '<span class="ultima">ultima versione</span>' : ""}</div>
+    <div class="data">${data(d)}</div><div class="dove">${esc(d.percorso)}</div>`;
+  if (d.versioni_precedenti && d.versioni_precedenti.length)
+    h += `<details><summary>${d.versioni_precedenti.length} versioni precedenti</summary>${d.versioni_precedenti.map(v => riga(v)).join("")}</details>`;
+  return h + "</div>";
+}
+function riquadro(titolo, docs, ultima, vuoto) {
+  return `<section><h2>${titolo} (${docs.length})</h2>${docs.length ? docs.map(d => riga(d, ultima)).join("") : `<div class="vuoto">${vuoto}</div>`}</section>`;
+}
+async function cerca(testo) {
+  if (!testo.trim()) return;
+  history.replaceState(null, "", "?q=" + encodeURIComponent(testo));
+  stato.textContent = "Ricerca in corso..."; r.innerHTML = "";
+  try {
+    const res = await fetch("/api/documenti/cerca?q=" + encodeURIComponent(testo));
+    const j = await res.json();
+    if (!res.ok) { stato.textContent = j.detail || "Errore nella ricerca"; return; }
+    stato.textContent = `${j.totale} documenti trovati per "${testo}"`;
+    r.innerHTML = riquadro("Istruzioni", j.istruzioni, true, "Nessuna istruzione trovata")
+      + riquadro("Schemi", j.schemi, false, "Nessuno schema trovato")
+      + riquadro("Altri documenti", j.altri, false, "Nessun altro documento");
+  } catch (e) { stato.textContent = "Errore di collegamento: " + e; }
+}
+document.getElementById("f").onsubmit = e => { e.preventDefault(); cerca(q.value); };
+const iniziale = new URLSearchParams(location.search).get("q");
+if (iniziale) { q.value = iniziale; cerca(iniziale); }
+</script></body></html>

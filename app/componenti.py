@@ -67,6 +67,11 @@ def _componenti_azienda(cfg: Config, llm, kb, catalogo, datasheet) -> Componenti
         extra["storico"] = storico
         extra["storico_collegamento"] = collegamento
         strumenti = crea_strumenti_storico(storico) + strumenti
+    if (cfg.dati_azienda / "indice_documenti.db").exists():   # indice costruito con scripts.indicizza_documenti
+        from app.agente.strumenti_documenti import crea_strumenti_documenti
+        from app.documenti.indice import IndiceDocumenti
+        extra["indice_documenti"] = IndiceDocumenti(cfg.dati_azienda / "indice_documenti.db", cfg.dati_azienda)
+        strumenti = strumenti + crea_strumenti_documenti(extra["indice_documenti"])
     from app.agente.limiti import limita
     return Componenti(cfg, None, kb, None, limita(strumenti), None, catalogo, datasheet, extra)
 

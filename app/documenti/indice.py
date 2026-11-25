@@ -1,0 +1,278 @@
+"""Indice di tutti i documenti dei prodotti (Produzione1): ricerca per articolo, codice, particolare o parte di parola.
+
+Per ogni file si salvano percorso, titolo, data, categoria (istruzioni / schemi / altri), prodotto (cartella di primo
+livello) e il testo estratto (PDF, Word, Excel, testo). La ricerca usa SQLite FTS5 (libreria standard): parole
+intere, inizio di parola e, sui nomi dei file, anche parti di parola. L'indice è incrementale: alla ricostruzione si
+rileggono solo i file nuovi o modificati.
+
+Le stesse idee di kb-parser (titolo, data normalizzata AAAA-MM-GG, estratto, decodifica dei testi), estese ai
+formati dei documenti tecnici.
+"""
+from __future__ import annotations
+
+import logging
+import re
+import sqlite3
+import zipfile
+from dataclasses import dataclass
+from datetime import date, datetime
+from pathlib import Path
+
+log = logging.getLogger("documenti")
+
+CARTELLE_ESCLUSE = {"storico", "firmware_analisi", ".cache", "__pycache__"}
+TESTO_MAX = 200_000
+PAGINE_PDF_MAX = 40
+ISTRUZIONI = re.compile(r"(?i)istruz|manual|installaz|montaggio|uso e manut|guida|user.?guide|\bist[_ -]|libretto")
+SCHEMI = re.compile(r"(?i)(^|[ _\-/])(sch|schema|schemi|schematic|elettric|asm)[ _\-.]|wiring|cablaggio|\.schdoc")
+VERSIONE = re.compile(r"(?i)[ _\-.]*(rev|ver|vers|v)\.?[ _]?\d+([._]\d+)*[a-z]?\b|[ _\-]\(\d+\)$|[ _\-]copia$")
+DATA_TESTO = re.compile(r"\b(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})\b|\b(\d{4})-(\d{2})-(\d{2})\b")
+
+
+@dataclass
+class Documento:
+    percorso: str          # relativo alla radice, con '/'
+    nome: str
+    titolo: str
+    data: str              # AAAA-MM-GG
+    categoria: str         # istruzioni | schemi | altri
+    prodotto: str
+    gruppo: str            # stesso documento in versioni diverse
+    estensione: str
+    estratto: str
+
+
+# --- estrazione del testo ---------------------------------------------------------------------------------------
+
+def _testo_pdf(f: Path) -> str:
+    import pypdfium2 as pdfium
+    pdf = pdfium.PdfDocument(str(f))
+    try:
+        parti = []
+        for i in range(min(len(pdf), PAGINE_PDF_MAX)):
+            pagina = pdf[i]
+            tp = pagina.get_textpage()
+            parti.append(tp.get_text_range())
+            tp.close()
+            pagina.close()
+        return "\n".join(parti)
+    finally:
+        pdf.close()
+
+
+def _testo_docx(f: Path) -> str:
+    with zipfile.ZipFile(f) as z:
+        xml = z.read("word/document.xml").decode("utf-8", "replace")
+    return re.sub(r"<[^>]+>", " ", xml.replace("</w:p>", "\n"))
+
+
+def _testo_excel(f: Path) -> str:
+    import pandas as pd
+    fogli = pd.read_excel(f, sheet_name=None, header=None, dtype=str)
+    righe = []
+    for df in fogli.values():
+        for r in df.fillna("").values.tolist():
+            riga = " ".join(c for c in r if c and c.lower() != "nan")
+            if riga.strip():
+                righe.append(riga)
+    return "\n".join(righe)
+
+
+def _testo_semplice(f: Path) -> str:
+    dati = f.read_bytes()[:2_000_000]
+    if dati.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return dati.decode("utf-16", "replace")
+    for cod in ("utf-8-sig", "cp1252"):
+        try:
+            return dati.decode(cod)
+        except UnicodeDecodeError:
+            pass
+    return dati.decode("latin-1", "replace")
+
+
+LETTORI = {".pdf": _testo_pdf, ".docx": _testo_docx, ".xlsx": _testo_excel, ".xls": _testo_excel,
+           ".xlsm": _testo_excel, ".txt": _testo_semplice, ".md": _testo_semplice, ".csv": _testo_semplice}
+
+
+def estrai_testo(f: Path) -> str:
+    lettore = LETTORI.get(f.suffix.lower())
+    if not lettore:
+        return ""
+    try:
+        return re.sub(r"[ \t]+", " ", lettore(f))[:TESTO_MAX]
+    except Exception as e:  # noqa: BLE001 - un file illeggibile si indicizza solo per nome
+        log.info("testo non estratto da %s: %s", f.name, e)
+        return ""
+
+
+# --- metadati --------------------------------------------------------------------------------------------------
+
+def data_documento(testo: str, f: Path) -> str:
+    """Prima data valida nel testo (es. il cartiglio di uno schema), altrimenti la data di modifica del file."""
+    oggi = date.today()
+    for m in DATA_TESTO.finditer(testo[:5000]):
+        try:
+            d = date(int(m[3]), int(m[2]), int(m[1])) if m[1] else date(int(m[4]), int(m[5]), int(m[6]))
+        except ValueError:
+            continue
+        if date(1990, 1, 1) <= d <= oggi:
+            return d.isoformat()
+    return datetime.fromtimestamp(f.stat().st_mtime).date().isoformat()
+
+
+def titolo_documento(testo: str, f: Path) -> str:
+    """Il nome del file è il titolo più affidabile per i documenti tecnici (i PDF hanno titoli interni vaghi);
+    per i testi brevi senza nome parlante si usa la prima riga."""
+    nome = re.sub(r"[_]+", " ", f.stem).strip()
+    if f.suffix.lower() in (".txt", ".md") and testo.strip() and len(nome) < 4:
+        return testo.strip().splitlines()[0][:120]
+    return nome
+
+
+def categoria(rel: str, testo: str, schemi_noti: set[str]) -> str:
+    nome = rel.rsplit("/", 1)[-1]
+    tabella = nome.lower().endswith((".xls", ".xlsx", ".xlsm", ".csv"))    # BOM e distinte: non sono schemi
+    if rel in schemi_noti or (SCHEMI.search(nome) and not tabella):
+        return "schemi"
+    if ISTRUZIONI.search(rel):
+        return "istruzioni"
+    if rel.lower().endswith(".pdf") and re.search(r"(?i)ALTIUM PRJ|SchDoc|PcbDoc|SHEET:\s*\d+ of", testo[:20000]):
+        return "schemi"
+    return "altri"
+
+
+def gruppo(nome: str) -> str:
+    """Chiave che accomuna le versioni dello stesso documento: 'Istruzioni_EP_rev3.pdf' ~ 'Istruzioni EP v4.pdf'."""
+    base = Path(nome).stem.lower()
+    for _ in range(3):
+        base = VERSIONE.sub("", base)
+    base = re.sub(r"(?<![a-z0-9])(19|20)\d{2}([-_.]?\d{2}){0,2}(?![a-z0-9])", "", base)   # date nel nome
+    return re.sub(r"[^a-z0-9]+", " ", base).strip()
+
+
+# --- indice ----------------------------------------------------------------------------------------------------
+
+class IndiceDocumenti:
+    def __init__(self, file_db: str | Path, radice: str | Path):
+        self.radice = Path(radice)
+        self.db = sqlite3.connect(str(file_db), check_same_thread=False)
+        self.db.executescript("""
+            CREATE TABLE IF NOT EXISTS meta(percorso TEXT PRIMARY KEY, dimensione INTEGER, mtime REAL, nome TEXT,
+                titolo TEXT, data TEXT, categoria TEXT, prodotto TEXT, gruppo TEXT, estensione TEXT, estratto TEXT);
+            CREATE VIRTUAL TABLE IF NOT EXISTS testi USING fts5(percorso UNINDEXED, titolo, cartelle, testo,
+                tokenize = "unicode61 remove_diacritics 2");
+        """)
+
+    def aggiorna(self, schemi_noti: set[str] | None = None, avanzamento=None) -> dict:
+        """Indicizza i file nuovi o modificati e toglie quelli spariti."""
+        schemi_noti = schemi_noti or set()
+        visti, nuovi, errori = set(), 0, 0
+        presenti = {p: (d, m) for p, d, m in self.db.execute("SELECT percorso, dimensione, mtime FROM meta")}
+        for f in sorted(self.radice.rglob("*")):
+            rel_parti = f.relative_to(self.radice).parts
+            if not f.is_file() or any(p.startswith(".") or p in CARTELLE_ESCLUSE for p in rel_parti):
+                continue
+            if f.parent == self.radice:          # rapporti e configurazioni dell'assistente
+                continue
+            rel = "/".join(rel_parti)
+            visti.add(rel)
+            st = f.stat()
+            if presenti.get(rel) == (st.st_size, st.st_mtime):
+                continue
+            try:
+                self._indicizza(f, rel, st, schemi_noti)
+                nuovi += 1
+            except Exception as e:  # noqa: BLE001
+                errori += 1
+                log.warning("non indicizzato %s: %s", rel, e)
+            if avanzamento and nuovi % 200 == 0 and nuovi:
+                avanzamento(nuovi)
+        spariti = set(presenti) - visti
+        for p in spariti:
+            self.db.execute("DELETE FROM meta WHERE percorso=?", (p,))
+            self.db.execute("DELETE FROM testi WHERE percorso=?", (p,))
+        self.db.commit()
+        return {"documenti": len(visti), "indicizzati_ora": nuovi, "rimossi": len(spariti), "errori": errori}
+
+    def _indicizza(self, f: Path, rel: str, st, schemi_noti: set[str]) -> None:
+        testo = estrai_testo(f)
+        prodotto = rel.split("/", 1)[0]
+        doc = Documento(rel, f.name, titolo_documento(testo, f), data_documento(testo, f),
+                        categoria(rel, testo, schemi_noti), prodotto, gruppo(f.name), f.suffix.lower().lstrip("."),
+                        re.sub(r"\s+", " ", testo[:400]).strip()[:200])
+        self.db.execute("INSERT OR REPLACE INTO meta VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                        (rel, st.st_size, st.st_mtime, doc.nome, doc.titolo, doc.data, doc.categoria, doc.prodotto,
+                         doc.gruppo, doc.estensione, doc.estratto))
+        self.db.execute("DELETE FROM testi WHERE percorso=?", (rel,))
+        cartelle = " ".join(rel.split("/")[:-1])
+        self.db.execute("INSERT INTO testi VALUES (?,?,?,?)", (rel, doc.titolo + " " + f.stem, cartelle, testo))
+
+    # --- ricerca -----------------------------------------------------------------------------------------------
+    @staticmethod
+    def _query_fts(testo: str) -> str:
+        """Ogni parola cercata deve comparire (anche come inizio di parola). '1407/1811' diventa la frase
+        '1407 1811*'; i codici restano interi."""
+        termini = []
+        for parola in testo.split():
+            pezzi = [p for p in re.split(r"[^\w]+", parola, flags=re.UNICODE) if p]
+            if pezzi:
+                termini.append('"' + " ".join(pezzi) + '"*')
+        return " AND ".join(termini)
+
+    def cerca(self, testo: str, limite: int = 300) -> dict:
+        testo = testo.strip()
+        if not testo:
+            return {"istruzioni": [], "schemi": [], "altri": [], "totale": 0}
+        trovati: dict[str, float] = {}
+        q = self._query_fts(testo)
+        if q:
+            for p, punteggio in self.db.execute(
+                    "SELECT percorso, bm25(testi, 0, 10.0, 3.0, 1.0) FROM testi WHERE testi MATCH ? "
+                    "ORDER BY 2 LIMIT ?", (q, limite)):
+                trovati[p] = punteggio
+        # parti di parola nel nome del file o nelle cartelle (es. '8003' dentro '2480035')
+        simile = f"%{testo.lower()}%"
+        for (p,) in self.db.execute("SELECT percorso FROM meta WHERE lower(percorso) LIKE ? LIMIT ?",
+                                    (simile, limite)):
+            trovati.setdefault(p, -100.0)
+        if not trovati:
+            return {"istruzioni": [], "schemi": [], "altri": [], "totale": 0}
+        segnaposti = ",".join("?" * len(trovati))
+        righe = self.db.execute(f"SELECT percorso, nome, titolo, data, categoria, prodotto, gruppo, estensione, "
+                                f"estratto FROM meta WHERE percorso IN ({segnaposti})", list(trovati)).fetchall()
+        docs = [dict(zip(("percorso", "nome", "titolo", "data", "categoria", "prodotto", "gruppo", "estensione",
+                          "estratto"), r, strict=True)) for r in righe]
+        for d in docs:
+            d["punteggio"] = trovati[d["percorso"]]
+        return {"istruzioni": self._ultime_versioni([d for d in docs if d["categoria"] == "istruzioni"]),
+                "schemi": sorted((d for d in docs if d["categoria"] == "schemi"), key=lambda d: d["data"],
+                                 reverse=True),
+                "altri": sorted((d for d in docs if d["categoria"] == "altri"),
+                                key=lambda d: (d["punteggio"], -int(d["data"].replace("-", "")))),
+                "totale": len(docs)}
+
+    @staticmethod
+    def _ultime_versioni(docs: list[dict]) -> list[dict]:
+        """Per ogni documento di istruzioni la versione più recente, con le precedenti a parte."""
+        gruppi: dict[tuple, list[dict]] = {}
+        for d in docs:
+            gruppi.setdefault((d["prodotto"], d["gruppo"]), []).append(d)
+        out = []
+        for versioni in gruppi.values():
+            versioni.sort(key=lambda d: (d["data"], d["nome"]), reverse=True)
+            out.append({**versioni[0], "versioni_precedenti": versioni[1:]})
+        return sorted(out, key=lambda d: d["data"], reverse=True)
+
+    def statistiche(self) -> dict:
+        per = dict(self.db.execute("SELECT categoria, COUNT(*) FROM meta GROUP BY categoria").fetchall())
+        return {"documenti": sum(per.values()), **per}
+
+
+def schemi_da_prodotti_yaml(radice: Path) -> set[str]:
+    """I PDF che lo scanner ha riconosciuto come schemi Altium sono schemi con certezza."""
+    import yaml
+    f = radice / "prodotti.yaml"
+    if not f.exists():
+        return set()
+    conf = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+    return {str(v[k]).replace("\\", "/") for v in conf.get("schede", []) for k in ("netlist", "disegno") if v.get(k)}

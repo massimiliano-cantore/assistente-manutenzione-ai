@@ -154,3 +154,20 @@ All'avvio l'assistente carica lo storico e ha due strumenti in più: `storico_ri
 storia di un seriale) e `statistiche_guasti` (componenti più sostituiti, cause annotate, firmware, seriali che
 tornano). Quando le note citano un componente dello schema (es. "sostituito K1"), il riferimento viene collegato
 alla scheda del prodotto. `/api/salute` mostra quante riparazioni ha caricato.
+
+## 8. Ricerca nei documenti dei prodotti
+
+Una pagina tipo motore di ricerca per tutti i file di Produzione1 (PDF, Word, Excel, testi): **http://localhost:8000/documenti**.
+Si scrive un articolo, un codice, un componente o una parte di parola e si ottengono tre riquadri:
+**Istruzioni** (per ogni documento l'ultima versione, con le precedenti a parte), **Schemi** e **Altri documenti**,
+ognuno con titolo, data e link che apre il file.
+
+L'indice si costruisce con `python -m scripts.indicizza_documenti C:\percorso\Produzione1` (lo fa anche
+`prepara_opera.bat`): la prima volta legge tutti i file, poi solo quelli nuovi o modificati. Sta in
+`Produzione1\indice_documenti.db`. Anche l'assistente lo usa (strumento `cerca_documenti`).
+
+Come si decide la categoria: *schemi* sono i PDF riconosciuti dallo scanner come schemi Altium e i file con
+"sch", "schema", "asm" nel nome; *istruzioni* i file con "istruz", "manual", "installaz", "montaggio", "guida" nel
+nome o nella cartella; il resto è *altri*. La data è la prima trovata nel documento (es. il cartiglio dello schema),
+altrimenti quella di modifica del file. Le versioni dello stesso documento si riconoscono dal nome senza
+"rev", "v1.2", date e copie.

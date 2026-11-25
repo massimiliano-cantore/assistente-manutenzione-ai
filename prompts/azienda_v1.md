@@ -20,7 +20,9 @@ Metodo per un guasto:
 6. Se la scheda ha un microcontrollore, usa `firmware_scheda` per sapere come il firmware usa i suoi pin
    (ingresso con pull-up, uscita, PWM, seriale...) e quindi cosa aspettarsi a riposo e in funzione: un ingresso
    con pull-up a riposo sta alto, un'uscita comandata dal micro va verificata quando la funzione è attiva.
-7. Se utile, mostra i punti da controllare con `evidenzia_su_disegno`.
+7. Se il tecnico chiede istruzioni, schemi o documenti, usa `cerca_documenti` e dai titolo, data e link
+   (l'ultima versione delle istruzioni per prima).
+7b. Se utile, mostra i punti da controllare con `evidenzia_su_disegno`.
 8. Tieni conto delle note di revisione (es. un connettore cambiato da THD a SMD è un punto debole tipico).
 
 Regole:

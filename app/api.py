@@ -8,6 +8,7 @@ GET  /metrics        metriche Prometheus
 """
 from __future__ import annotations
 
+import mimetypes
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -74,6 +75,40 @@ def crea_app(componenti: Componenti | None = None, frontend: Path | None = FRONT
         if not f.exists():
             raise HTTPException(404)
         return FileResponse(f, media_type="image/png")
+
+    # --- ricerca nei documenti dei prodotti (solo versione azienda) ---------------------------------------
+    def _indice():
+        c: Componenti = app.state.c
+        if not c.cfg.dati_azienda:
+            raise HTTPException(404, "ricerca documenti disponibile solo con la documentazione aziendale")
+        if "indice_documenti" not in c.extra:
+            from app.documenti.indice import IndiceDocumenti
+            f = c.cfg.dati_azienda / "indice_documenti.db"
+            if not f.exists():
+                raise HTTPException(503, "indice dei documenti non ancora costruito: lancia "
+                                         "'python -m scripts.indicizza_documenti' o prepara_opera.bat")
+            c.extra["indice_documenti"] = IndiceDocumenti(f, c.cfg.dati_azienda)
+        return c.extra["indice_documenti"]
+
+    @app.get("/documenti")
+    def pagina_documenti():
+        return FileResponse(Path(__file__).parent / "documenti" / "pagina.html", media_type="text/html")
+
+    @app.get("/api/documenti/cerca")
+    def cerca_documenti(q: str):
+        return _indice().cerca(q[:200])
+
+    @app.get("/api/documenti/apri")
+    def apri_documento(p: str):
+        radice = app.state.c.cfg.dati_azienda
+        if not radice:
+            raise HTTPException(404)
+        f = (radice / p).resolve()
+        if not f.is_file() or radice.resolve() not in f.parents:   # solo file dentro la cartella dei documenti
+            raise HTTPException(404)
+        tipo = mimetypes.guess_type(f.name)[0] or "application/octet-stream"
+        intestazioni = {"Content-Disposition": f'inline; filename="{f.name.encode("ascii", "replace").decode()}"'}
+        return FileResponse(f, media_type=tipo, headers=intestazioni)
 
     @app.get("/metrics")
     def metriche():
