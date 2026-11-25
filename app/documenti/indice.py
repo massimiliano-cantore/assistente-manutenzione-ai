@@ -343,7 +343,7 @@ def leggi_elenco_cartelle(file: Path, radice: Path) -> list[str]:
             log.warning("cartella fuori da %s, saltata: %s", radice, riga)
             continue
         if not c.is_dir():
-            log.warning("cartella non trovata, saltata: %s", riga)
+            log.warning("cartella non trovata, saltata: %s (cercata in %s)", riga, c)
             continue
         out.append(rel.as_posix())
     return out

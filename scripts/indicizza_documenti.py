@@ -33,7 +33,8 @@ def main() -> None:
         for c in cartelle:
             print(f"  - {c or '(tutta la cartella)'}", flush=True)
         if not cartelle:
-            sys.exit(f"Nessuna cartella valida in {elenco}: controlla i percorsi.")
+            sys.exit(f"Nessuna cartella valida in {elenco}: i nomi devono essere sottocartelle di {radice} "
+                     "(oppure scrivi il percorso completo). Controlla anche DOCUMENTI in prepara_opera.bat.")
     inizio = time.time()
     indice = IndiceDocumenti(produzione / "indice_documenti.db", radice)
     print(f"Indicizzo {radice} ...", flush=True)
