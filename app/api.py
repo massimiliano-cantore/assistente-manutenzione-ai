@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html
 import mimetypes
+import os
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -47,6 +48,9 @@ def crea_app(componenti: Componenti | None = None, frontend: Path | None = FRONT
         yield
 
     app = FastAPI(title="Assistente tecnico KYROS", version="1.0", lifespan=ciclo_vita)
+    if os.getenv("DATI_AZIENDA"):   # colleghi dalla rete: solo ricerca documenti, con password e registro accessi
+        from app.documenti.accesso import AccessoDocumenti
+        app.add_middleware(AccessoDocumenti, cartella=Path(os.environ["DATI_AZIENDA"]))
     app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"], allow_methods=["*"],
                        allow_headers=["*"])
 
