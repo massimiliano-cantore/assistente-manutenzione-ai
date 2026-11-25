@@ -174,13 +174,19 @@ class IndiceDocumenti:
         self.db.execute("INSERT OR REPLACE INTO impostazioni VALUES ('radice', ?)", (str(self.radice),))
         self.db.commit()
 
-    def aggiorna(self, schemi_noti: set[str] | None = None, avanzamento=None) -> dict:
-        """Indicizza i file nuovi o modificati e toglie quelli spariti."""
+    def aggiorna(self, schemi_noti: set[str] | None = None, avanzamento=None,
+                 cartelle: list[str] | None = None) -> dict:
+        """Indicizza i file nuovi o modificati e toglie quelli spariti.
+        cartelle: sottocartelle della radice da indicizzare (le altre si saltano); None = tutta la radice."""
         schemi_noti = schemi_noti or set()
         salta_radice = (self.radice / "prodotti.yaml").exists()
         visti, nuovi, errori = set(), 0, 0
         presenti = {p: (d, m) for p, d, m in self.db.execute("SELECT percorso, dimensione, mtime FROM meta")}
-        for f in sorted(self.radice.rglob("*")):
+        if cartelle is None:
+            file_da_leggere = self.radice.rglob("*")
+        else:
+            file_da_leggere = (f for c in dict.fromkeys(cartelle) for f in (self.radice / c).rglob("*"))
+        for f in sorted(set(file_da_leggere)):
             rel_parti = f.relative_to(self.radice).parts
             if not f.is_file() or any(p.startswith(".") or p in CARTELLE_ESCLUSE for p in rel_parti):
                 continue
@@ -297,4 +303,26 @@ def schemi_da_prodotti_yaml(radice: Path, radice_indice: Path | None = None) -> 
             out.add((Path(radice) / r).resolve().relative_to(base).as_posix())
         except ValueError:
             pass
+    return out
+
+
+def leggi_elenco_cartelle(file: Path, radice: Path) -> list[str]:
+    """Una sottocartella per riga (relativa alla radice o percorso completo); # per i commenti.
+    Restituisce i percorsi relativi validi; avvisa per quelli inesistenti o fuori dalla radice."""
+    out = []
+    for riga in file.read_text(encoding="utf-8-sig").splitlines():
+        riga = riga.split("#", 1)[0].strip().strip('"').rstrip("\\/")
+        if not riga:
+            continue
+        c = Path(riga)
+        c = c if c.is_absolute() else radice / c
+        try:
+            rel = c.resolve().relative_to(radice.resolve())
+        except ValueError:
+            log.warning("cartella fuori da %s, saltata: %s", radice, riga)
+            continue
+        if not c.is_dir():
+            log.warning("cartella non trovata, saltata: %s", riga)
+            continue
+        out.append(rel.as_posix())
     return out

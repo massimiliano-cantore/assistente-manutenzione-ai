@@ -91,3 +91,16 @@ def test_cartella_documenti_separata(tmp_path):
     i = IndiceDocumenti(prod / "indice_documenti.db")        # riapertura: cartella letta dall'indice
     assert i.radice == tmp_path / "Documenti condivisi"
     assert i.cerca("4000123")["istruzioni"]
+
+
+def test_solo_cartelle_elencate(tmp_path):
+    from app.documenti.indice import IndiceDocumenti, leggi_elenco_cartelle
+    for nome in ("Prodotti", "Amministrazione"):
+        (tmp_path / nome).mkdir()
+        (tmp_path / nome / f"{nome}.txt").write_text("articolo 4000999", encoding="utf-8")
+    elenco = tmp_path / "elenco.txt"
+    elenco.write_text("# commento\nProdotti\nNonEsiste\n", encoding="utf-8")
+    cartelle = leggi_elenco_cartelle(elenco, tmp_path)
+    assert cartelle == ["Prodotti"]
+    i = IndiceDocumenti(tmp_path / "i.db", tmp_path)
+    assert i.aggiorna(cartelle=cartelle)["documenti"] == 1
