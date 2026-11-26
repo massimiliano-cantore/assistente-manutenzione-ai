@@ -171,3 +171,29 @@ Come si decide la categoria: *schemi* sono i PDF riconosciuti dallo scanner come
 nome o nella cartella; il resto è *altri*. La data è la prima trovata nel documento (es. il cartiglio dello schema),
 altrimenti quella di modifica del file. Le versioni dello stesso documento si riconoscono dal nome senza
 "rev", "v1.2", date e copie.
+
+## 9. Meccanica: assiemi, tavole e particolari SolidWorks
+
+Lo scanner legge i file SolidWorks del PDM (.SLDASM, .SLDDRW, .SLDPRT) **senza SolidWorks**:
+
+    python -m scripts.scansiona_meccanica C:\OPERA_PDM C:\percorso\Produzione1
+
+Per ogni codice ricava denominazione, date, stato, autore, categoria (dalla cartella del PDM: A commerciali,
+E elettronica, F particolari a disegno, G grezzi, L gruppi, V viteria), la **distinta** della tavola con le
+descrizioni, i sottogruppi e i gruppi che lo contengono, gli articoli di prodotto citati nella denominazione
+(es. 2560030) e le immagini di anteprima (esploso e 3D). Le cartelle X_ (progettazione), di prova e "old" si
+saltano. Tutto va in `Produzione1\meccanica\` (indice.json, img\), mai nel repository.
+
+**Funzionamento meccanico.** Con `--descrivi N` l'AI guarda esploso, 3D e distinta di N assiemi (prima quelli
+con parti elettriche) e propone come funzionano: descrizione, catena (es. scheda → bobina → nucleo → leva →
+catenaccio → molla, sensore di fine corsa) e guasti tipici con i controlli. Vanno in
+`Produzione1\meccanica\funzionamento.yaml` come `da_confermare`: il tecnico li corregge e mette `confermato`.
+Le voci confermate non vengono più riscritte. Costo indicativo: circa 0,03 $ ad assieme.
+
+L'assistente usa tutto con lo strumento `scheda_meccanica` (codice disegno, articolo di prodotto o parole):
+le parti elettriche della distinta (bobina, sensori, scheda SP...) si agganciano alle schede degli schemi, così
+la diagnosi segue la catena completa, elettrica e meccanica. Anche la ricerca documenti trova i file SolidWorks
+per codice, denominazione e righe di distinta, e li apre con SolidWorks.
+
+Limiti: dai file nativi non si leggono geometria, vincoli e quantità. Per i particolari senza file proprio nel
+PDM la descrizione viene dalla riga di distinta del gruppo che li contiene.

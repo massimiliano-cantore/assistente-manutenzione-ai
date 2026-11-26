@@ -99,9 +99,19 @@ def _testo_odf(f: Path) -> str:
     return re.sub(r"<[^>]+>", " ", xml).replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
 
 
+def _testo_solidworks(f: Path) -> str:
+    """Tavole, assiemi e particolari SolidWorks: codice, denominazione e righe della distinta."""
+    from app.meccanica.solidworks import leggi
+    sw = leggi(f)
+    righe = [sw.codice, sw.denominazione, sw.proprieta.get("DATA", "")]
+    righe += [f"{c} {d}" for c, d in zip(sw.distinta, sw.descrizioni, strict=False)] or sw.descrizioni
+    return "\n".join(r for r in righe if r)
+
+
 LETTORI = {".pdf": _testo_pdf, ".docx": _testo_docx, ".xlsx": _testo_excel, ".xls": _testo_excel,
            ".xlsm": _testo_excel, ".txt": _testo_semplice, ".md": _testo_semplice, ".csv": _testo_semplice,
-           ".odg": _testo_odf, ".odt": _testo_odf, ".ods": _testo_odf, ".odp": _testo_odf}
+           ".odg": _testo_odf, ".sldasm": _testo_solidworks, ".slddrw": _testo_solidworks,
+           ".sldprt": _testo_solidworks, ".odt": _testo_odf, ".ods": _testo_odf, ".odp": _testo_odf}
 
 
 def estrai_testo(f: Path) -> str:

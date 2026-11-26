@@ -21,7 +21,7 @@ def accorcia(valore, max_lista: int = 25):
     return valore
 
 
-PIU_LUNGHI = {"panoramica_prodotti": 20000, "cerca_prodotto": 10000}
+PIU_LUNGHI = {"panoramica_prodotti": 20000, "cerca_prodotto": 10000, "scheda_meccanica": 10000}
 
 
 def limita(strumenti: list, max_caratteri: int = MAX_CARATTERI) -> list:

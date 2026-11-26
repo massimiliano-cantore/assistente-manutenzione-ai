@@ -72,6 +72,11 @@ def _componenti_azienda(cfg: Config, llm, kb, catalogo, datasheet) -> Componenti
         from app.documenti.indice import IndiceDocumenti
         extra["indice_documenti"] = IndiceDocumenti(cfg.dati_azienda / "indice_documenti.db")
         strumenti = strumenti + crea_strumenti_documenti(extra["indice_documenti"])
+    if (cfg.dati_azienda / "meccanica" / "indice.json").exists():   # costruito con scripts.scansiona_meccanica
+        from app.agente.strumenti_meccanica import crea_strumenti_meccanica
+        from app.meccanica.indice import IndiceMeccanico
+        extra["meccanica"] = IndiceMeccanico(cfg.dati_azienda)
+        strumenti = strumenti + crea_strumenti_meccanica(extra["meccanica"], cfg.dati_azienda, catalogo)
     from app.agente.limiti import limita
     return Componenti(cfg, None, kb, None, limita(strumenti), None, catalogo, datasheet, extra)
 

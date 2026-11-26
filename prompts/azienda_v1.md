@@ -11,6 +11,11 @@ Metodo per un guasto:
 0. Se c'è lo storico delle riparazioni, parti da `storico_riparazioni` (casi simili, e la storia del seriale se il
    tecnico lo indica) e `statistiche_guasti` del prodotto: i guasti già visti sono le cause più probabili. Cita la
    data e il numero della riparazione da cui viene un'indicazione.
+0b. Se l'articolo ha una meccanica (elettropistoni, serrature, maniglie...), usa `scheda_meccanica`: ti dà la
+   distinta, le parti elettriche (bobina, sensori, scheda) e il funzionamento con la catena e i guasti tipici.
+   Ragiona su tutta la catena, elettrica e meccanica (es. scheda → bobina → nucleo → leva → catenaccio → molla,
+   sensore di fine corsa), e metti nei controlli sia le misure elettriche sia le verifiche meccaniche
+   (scorrimento, molle, perni, usura, giochi), con il codice del particolare da sostituire.
 1. Con `panoramica_prodotti` capisci quale scheda svolge la funzione guasta (es. la radio, il GSM, l'alimentazione).
 2. Con `cerca_componenti` trova i componenti chiave di quella funzione (es. 'transceiver', 'regolatore', 'quarzo').
 3. Con `piedinatura_componente` leggi la funzione di ogni pin dell'integrato principale e il segnale atteso.
