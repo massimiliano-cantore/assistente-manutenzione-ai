@@ -1,8 +1,12 @@
 # ruff: noqa
 """PASSO 2 (su Kaggle, GPU T4 x2): classifica le pagine e legge le schede con Qwen2.5-VL-7B. Costo 0.
 
-In un notebook Kaggle con il dataset privato aggiunto e l'acceleratore "GPU T4 x2", in una cella:
-    !python /kaggle/input/<nome-dataset>/leggi_su_kaggle.py
+In un notebook Kaggle con il dataset aggiunto, acceleratore "GPU T4 x2" e Internet attivo, in una cella:
+    !wget -q -N https://raw.githubusercontent.com/massimiliano-cantore/assistente-manutenzione-ai/main/archivio_schede/leggi_su_kaggle.py
+    !wget -q -N https://raw.githubusercontent.com/massimiliano-cantore/assistente-manutenzione-ai/main/archivio_schede/prompt_scheda.py
+    !ANNI=2025,2026 python leggi_su_kaggle.py
+Il dataset può contenere direttamente i PDF (cartelle anno/mese/file.pdf, es. resi-pdf-2023-2025): le pagine si
+ricavano qui. ANNI sceglie gli anni (dal percorso); MAX_SCHEDE=20 per una prova breve.
 Opzionale: ADATTATORE=/kaggle/input/<dataset-lora> per usare il modello addestrato sulle vostre schede.
 
 1. Classifica ogni pagina (DDT, scheda fronte, scheda retro, altro) con un'immagine piccola: ~3 s a pagina.
@@ -16,8 +20,42 @@ import subprocess
 subprocess.run("pip install -q -U 'transformers>=4.49,<4.57' accelerate qwen-vl-utils peft", shell=True)
 
 import csv, glob, json, os, re, shutil, sys, time  # noqa: E401,E402
-DATI = os.path.dirname(glob.glob("/kaggle/input/**/pagine.csv", recursive=True)[0])
-sys.path.insert(0, DATI)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+csv_pagine = glob.glob("/kaggle/input/**/pagine.csv", recursive=True)
+if csv_pagine:                      # dataset preparato sul PC con prepara_pagine.py
+    DATI = os.path.dirname(csv_pagine[0])
+    sys.path.insert(0, DATI)
+    pagine = list(csv.DictReader(open(f"{DATI}/pagine.csv", encoding="utf-8")))
+    CARTELLA_PAGINE = f"{DATI}/pagine"
+else:                               # dataset con i PDF: si convertono le pagine qui
+    subprocess.run("pip install -q pypdfium2", shell=True)
+    import hashlib
+    import pypdfium2 as pdfium
+    ANNI = [a.strip() for a in os.environ.get("ANNI", "2025,2026").split(",") if a.strip()]
+    CARTELLA_PAGINE = "/kaggle/working/pagine"
+    os.makedirs(CARTELLA_PAGINE, exist_ok=True)
+    pagine = []
+    for pdf in sorted(glob.glob("/kaggle/input/**/*.pdf", recursive=True) + glob.glob("/kaggle/input/**/*.PDF",
+                                                                                         recursive=True)):
+        parti = pdf.split("/")
+        anno = next((x for x in parti if re.fullmatch(r"20\d\d", x)), "")
+        if anno not in ANNI:
+            continue
+        mese = parti[parti.index(anno) + 1] if parti.index(anno) + 2 < len(parti) else ""
+        sigla = hashlib.sha1(pdf.encode()).hexdigest()[:10]
+        try:
+            doc = pdfium.PdfDocument(pdf)
+        except Exception as e:
+            print("PDF non letto:", pdf, e)
+            continue
+        for k in range(len(doc)):
+            nome = f"{anno}_{sigla}_p{k + 1:03d}.jpg"
+            f = f"{CARTELLA_PAGINE}/{nome}"
+            if not os.path.exists(f):
+                doc[k].render(scale=170 / 72, grayscale=True).to_pil().save(f, "JPEG", quality=82)
+            pagine.append({"pagina": nome, "anno": anno, "mese": mese,
+                           "file": "/".join(parti[parti.index(anno):]), "n": k + 1, "di": len(doc)})
+    print(f"Anni {ANNI}: {len(pagine)} pagine da {len({p['file'] for p in pagine})} PDF", flush=True)
 from prompt_scheda import PROMPT  # noqa: E402
 
 OUT = "/kaggle/working/schede.jsonl"
@@ -56,13 +94,12 @@ DOMANDA_CLASSE = ("Che pagina è? Rispondi con UNA parola: DDT (documento di tra
                   "scheda di riparazione: intestazione con numero riparazione, cliente, articolo e tabella codici), "
                   "RETRO (retro della scheda: NOTE, continuazione tabella, eseguito il), ALTRO.")
 
-pagine = list(csv.DictReader(open(f"{DATI}/pagine.csv", encoding="utf-8")))
 classi = json.load(open(CLASSI)) if os.path.exists(CLASSI) else {}
 t0 = time.time()
 for i, p in enumerate(pagine):
     if p["pagina"] in classi:
         continue
-    r = chiedi([f"{DATI}/pagine/{p['pagina']}"], DOMANDA_CLASSE, proc_piccolo, 5).upper()
+    r = chiedi([f"{CARTELLA_PAGINE}/{p['pagina']}"], DOMANDA_CLASSE, proc_piccolo, 5).upper()
     classi[p["pagina"]] = next((c for c in ("DDT", "FRONTE", "RETRO") if c in r), "ALTRO")
     if i % 100 == 0:
         json.dump(classi, open(CLASSI, "w"))
@@ -80,6 +117,8 @@ for i, p in enumerate(pagine):
         retro = pagine[i + 1]["pagina"]
     schede.append({"id": p["pagina"][:-4], "file": p["file"], "anno": p["anno"], "mese": p["mese"],
                    "pagine": [p["pagina"]] + ([retro] if retro else [])})
+if os.environ.get("MAX_SCHEDE"):
+    schede = schede[:int(os.environ["MAX_SCHEDE"])]
 print(len(schede), "schede da leggere", flush=True)
 
 STAMPATI = ["riparazione_n", "data", "cliente", "articolo"]
@@ -89,7 +128,7 @@ with open(OUT, "a") as fo:
         if s["id"] in fatti:
             continue
         t = time.time()
-        grezzo = chiedi([f"{DATI}/pagine/{x}" for x in s["pagine"]], PROMPT, proc_grande, 1400)
+        grezzo = chiedi([f"{CARTELLA_PAGINE}/{x}" for x in s["pagine"]], PROMPT, proc_grande, 1400)
         m = re.search(r"\{.*\}", grezzo, re.S)
         try:
             pred = json.loads(m.group()) if m else None
