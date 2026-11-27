@@ -38,7 +38,7 @@ def intervento_saro(v: str | None) -> str | None:
     if not v:
         return v
     m = re.fullmatch(r"\s*S\s*A\s*R\s*O\s*(\(.*\))?\s*", str(v).upper())
-    return f"? {m[1]}".strip() if m else v
+    return ("? " + (m[1] or "")).strip() if m else v
 
 
 def completa_idem(righe: list[dict]) -> list[dict]:
