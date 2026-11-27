@@ -35,6 +35,9 @@ else:                               # dataset con i PDF: si convertono le pagine
     CARTELLA_PAGINE = "/kaggle/working/pagine"
     os.makedirs(CARTELLA_PAGINE, exist_ok=True)
     pagine = []
+    max_pdf = int(os.environ["MAX_SCHEDE"]) if os.environ.get("MAX_SCHEDE") else None   # prova breve: pochi PDF
+    n_pdf = 0
+    print("Converto le pagine dei PDF in immagini...", flush=True)
     for pdf in sorted(glob.glob("/kaggle/input/**/*.pdf", recursive=True) + glob.glob("/kaggle/input/**/*.PDF",
                                                                                          recursive=True)):
         parti = pdf.split("/")
@@ -42,6 +45,11 @@ else:                               # dataset con i PDF: si convertono le pagine
         if anno not in ANNI:
             continue
         mese = parti[parti.index(anno) + 1] if parti.index(anno) + 2 < len(parti) else ""
+        if max_pdf and n_pdf >= max_pdf:
+            break
+        n_pdf += 1
+        if n_pdf % 25 == 0:
+            print(f"  ... {n_pdf} PDF convertiti ({len(pagine)} pagine)", flush=True)
         sigla = hashlib.sha1(pdf.encode()).hexdigest()[:10]
         try:
             doc = pdfium.PdfDocument(pdf)
@@ -71,6 +79,7 @@ from qwen_vl_utils import process_vision_info  # noqa: E402
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration  # noqa: E402
 
 MODELLO = "Qwen/Qwen2.5-VL-7B-Instruct"
+print("Carico il modello (la prima volta lo scarica: circa 16 GB, qualche minuto)...", flush=True)
 model = Qwen2_5_VLForConditionalGeneration.from_pretrained(MODELLO, torch_dtype=torch.float16, device_map="auto")
 if os.environ.get("ADATTATORE"):
     from peft import PeftModel
@@ -101,7 +110,7 @@ for i, p in enumerate(pagine):
         continue
     r = chiedi([f"{CARTELLA_PAGINE}/{p['pagina']}"], DOMANDA_CLASSE, proc_piccolo, 5).upper()
     classi[p["pagina"]] = next((c for c in ("DDT", "FRONTE", "RETRO") if c in r), "ALTRO")
-    if i % 100 == 0:
+    if i % 25 == 0:
         json.dump(classi, open(CLASSI, "w"))
         print(f"classificate {len(classi)}/{len(pagine)} ({time.time() - t0:.0f} s)", flush=True)
 json.dump(classi, open(CLASSI, "w"))
