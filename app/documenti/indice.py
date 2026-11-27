@@ -335,14 +335,16 @@ class IndiceDocumenti:
                           "estratto"), r, strict=True)) for r in righe]
         testi = dict(self.db.execute(f"SELECT percorso, testo FROM testi WHERE percorso IN ({segnaposti})",
                                      list(candidati)).fetchall())
-        rx_tipo = TIPI_DOCUMENTO_TESTO.get(d["tipo"])
+        rx_nome, rx_testo = TIPI_DOCUMENTO_NOME.get(d["tipo"]), TIPI_DOCUMENTO_TESTO.get(d["tipo"])
         for doc in docs:
             testo = testi.get(doc["percorso"], "") or ""
             nome = (doc["titolo"] + " " + doc["percorso"]).lower()
             # elenchi (codici a barre, listini, distinte di magazzino): tanti codici diversi, nessun legame col tipo
-            doc["elenco"] = len(set(re.findall(r"\b\d{5,7}\b", testo))) > 40
-            doc["tipo_ok"] = bool(d["tipo"] and (doc["categoria"] == d["tipo"] or (rx_tipo and (
-                rx_tipo.search(nome) or rx_tipo.search(testo[:3000].lower())))))
+            doc["elenco"] = len(set(re.findall(r"\b\d{5,14}[a-z]?\b", testo.lower()))) > 40 or (
+                doc["estensione"] in FOGLI and "codic" in nome)
+            foglio = doc["estensione"] in FOGLI      # un foglio di calcolo non è uno schema né un manuale
+            doc["tipo_ok"] = bool(d["tipo"] and (doc["categoria"] == d["tipo"] or (not foglio and rx_nome and (
+                rx_nome.search(nome) or rx_testo.search(testo[:5000].lower())))))
             parole_ok = sum(doc["percorso"] in v for v in per_parola.values())
             nel_titolo = sum(w in nome for w in d["parole"])
             doc["punteggio"] = -(parole_ok * 2 + nel_titolo * 3 + (8 if doc["tipo_ok"] else 0)
@@ -429,10 +431,17 @@ TIPI_DOCUMENTO = {
     "istruzioni": re.compile(r"^(istruz|manual|montagg|installaz|guida|uso$|procedur|libretto)"),
 }
 # come riconoscere nel nome o nelle prime righe un documento del tipo chiesto, anche se non è nella categoria
-TIPI_DOCUMENTO_TESTO = {
-    "schemi": re.compile(r"schem|collegament|cablagg|wiring|morsett|elettric|connession"),
+TIPI_DOCUMENTO_NOME = {
+    "schemi": re.compile(r"schem|collegament|cablagg|wiring|morsett"),
     "istruzioni": re.compile(r"istruz|manual|montagg|installaz|guida|libretto|procedur"),
 }
+# nel testo servono espressioni precise ("elettrico" da solo c'è anche in "Elettropistone")
+TIPI_DOCUMENTO_TESTO = {
+    "schemi": re.compile(r"schema (elettrico|di collegamento|dei collegamenti|di cablaggio)|cablaggio|wiring diagram|"
+                         r"morsettiera"),
+    "istruzioni": re.compile(r"istruzioni (di|per)|manuale (d'uso|di|per)|installazione|montaggio"),
+}
+FOGLI = {"xls", "xlsx", "xlsm", "ods", "csv"}
 CODICE = re.compile(r"^[\w./-]*\d[\w./-]*$")
 
 

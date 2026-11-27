@@ -166,3 +166,17 @@ def test_domanda_esclude_elenchi(tmp_path):
     r = i.cerca_domanda("trova lo schema di collegamento della 2560035 con la consolle 54612")
     assert [x["nome"] for x in r["proposti"]] == ["Collegamento 2560035 - 54612.txt"]
     assert r["domanda"]["elenchi_esclusi"] == 1
+
+
+def test_foglio_codici_a_barre_non_e_uno_schema(tmp_path):
+    import zipfile
+
+    from app.documenti.indice import IndiceDocumenti
+    cart = tmp_path / "Doc" / "Prod"
+    cart.mkdir(parents=True)
+    with zipfile.ZipFile(cart / "Codici barre OPERA.ods", "w") as z:
+        z.writestr("content.xml", "<x><text:p>Elettropistone 2560030 8012345678901 54610A</text:p></x>")
+    i = IndiceDocumenti(tmp_path / "i.db", tmp_path / "Doc")
+    i.aggiorna()
+    r = i.cerca_domanda("schema di collegamento elettrico tra 54610A e 2560030")
+    assert r["proposti"] == [] and r["totale"] == 0
