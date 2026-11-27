@@ -126,11 +126,11 @@ json.dump(classi, open(CLASSI, "w"))
 valori = [v for k, v in classi.items() if k != "_versione"]
 print("Classi:", {c: valori.count(c) for c in set(valori)}, flush=True)
 
-# schede: FRONTE (+ RETRO che segue nello stesso PDF), oppure RETRO da solo (fronte mancante nella scansione)
+# schede: FRONTE (+ RETRO che segue nello stesso PDF); i RETRO senza fronte si scartano
 schede, usate = [], set()
 for i, p in enumerate(pagine):
     c = classi.get(p["pagina"])
-    if p["pagina"] in usate or c not in ("FRONTE", "RETRO"):
+    if p["pagina"] in usate or c != "FRONTE":       # i retro da soli si scartano: troppo spesso non sono schede
         continue
     gruppo = [p["pagina"]]
     if c == "FRONTE" and i + 1 < len(pagine) and pagine[i + 1]["file"] == p["file"] \
