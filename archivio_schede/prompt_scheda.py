@@ -23,8 +23,13 @@ Restituisci SOLO un oggetto JSON con questa struttura:
 }
 
 Regole:
-- La tabella dei componenti ha 4 colonne: Codice, Descrizione, Intervento, Pz. Nella colonna Intervento c'è l'azione
-  con l'eventuale causa tra parentesi, tutto insieme (es. "SOSTITUZIONE (ROTTO)", "AGGIORNAMENTO"): non dividerla.
+- La tabella dei componenti ha 4 colonne: Codice, Descrizione, Intervento, Pz.
+- Nella colonna Intervento sono prestampate le lettere "S A R O" e il tecnico ne cerchia o barra UNA:
+  S = SOSTITUZIONE, A = AGGIORNAMENTO, R = RIPARAZIONE, O = ALTRO. Scrivi la PAROLA della lettera segnata
+  (mai "SARO" o "S A R O"), seguita dall'eventuale causa scritta a mano tra parentesi, es. "SOSTITUZIONE (ROTTO)".
+  Se non capisci quale lettera è segnata scrivi "?" più la causa e metti il campo in campi_incerti.
+- I codici sono di solito come 01327W00, 00162B00, SCA4660, SL480, 0603/1184, 10001V00: le lettere O in fondo
+  dopo una lettera sono zeri (00244F00, non 00244 FOO); scrivi i codici senza spazi.
 - La tabella può continuare sul retro: riporta tutte le righe compilate in ordine, e SOLO quelle compilate
   (niente righe vuote).
 - IDEM: se in una cella ci sono le virgolette o una 'n' NON completarla tu: scrivi il segno così com'è, con

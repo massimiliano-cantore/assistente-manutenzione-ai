@@ -17,11 +17,39 @@ DATE = ("data", "ricevuto_il", "ddt_del")
 COSTO_SCHEDA_LOTTI = {"Sonnet": 0.04, "Haiku": 0.013}   # $ indicativi a scheda con la Batch API
 
 
+def pulisci(v):
+    """'null', 'None', '' -> None."""
+    return None if isinstance(v, str) and v.strip().lower() in ("", "null", "none", "n/a", "/", "-") else v
+
+
+def pulisci_codice(c: str | None) -> str | None:
+    """'00244 FOO' -> '00244F00', 'SCA 4660' -> 'SCA4660'."""
+    import re
+    if not c:
+        return c
+    c = re.sub(r"\s+", "", str(c).upper())
+    c = re.sub(r"(?<=\d[A-Z])OO$", "00", c)
+    return re.sub(r"(?<=\d)O(?=\d)", "0", c)
+
+
+def intervento_saro(v: str | None) -> str | None:
+    """Il modello a volte copia le lettere prestampate 'S A R O' invece della lettera segnata."""
+    import re
+    if not v:
+        return v
+    m = re.fullmatch(r"\s*S\s*A\s*R\s*O\s*(\(.*\))?\s*", str(v).upper())
+    return f"? {m[1]}".strip() if m else v
+
+
 def completa_idem(righe: list[dict]) -> list[dict]:
     """Virgolette o 'n' in una cella = valore della riga sopra; '" (ROTTO)' = azione sopra + nuova causa."""
     import re
     sopra: dict = {}
     for r in righe:
+        for k in list(r):
+            r[k] = pulisci(r[k])
+        r["codice"] = pulisci_codice(r.get("codice"))
+        r["intervento"] = intervento_saro(r.get("intervento"))
         for k in ("codice", "descrizione", "intervento"):
             v = str(r.get(k) or "").strip()
             m = re.fullmatch(r"(?:\"|''|“|”|n|N)\s*(\(.*\))?", v)
@@ -57,13 +85,17 @@ def main() -> None:
     da_controllare = []
     for r in righe:
         pred = r.get("pred") or {}
+        righe_p = pred.get("righe") or []
+        if any(str(x.get("intervento") or "").replace(" ", "").upper().startswith("SARO") for x in righe_p):
+            r["da_controllare"] = True
+            r["motivi"] = r["motivi"] + ["intervento S/A/R/O non letto"]
         if r["da_controllare"]:
             da_controllare.append(r)
         if not pred:          # lettura fallita: resta solo nell'elenco da controllare
             continue
         scheda = {"formato": "docai-scheda/1", "id": r["id"], "file_origine": r["file"], "lettore": "qwen2.5-vl-7b",
                   "da_controllare": r["da_controllare"], "motivi": r["motivi"], "pagine": r["pagine"],
-                  "campi": {k: (anno_coerente(v, r["anno"], r.get("mese", "")) if k in DATE else v)
+                  "campi": {k: (anno_coerente(pulisci(v), r["anno"], r.get("mese", "")) if k in DATE else pulisci(v))
                             for k, v in pred.items() if k != "righe"},
                   "righe": completa_idem(pred.get("righe") or [])}
         (dest / r["anno"]).mkdir(exist_ok=True)
