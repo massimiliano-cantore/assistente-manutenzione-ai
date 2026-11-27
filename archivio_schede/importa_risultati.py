@@ -83,6 +83,8 @@ def main() -> None:
     dest = Path(sys.argv[2]) / "storico" / "qwen"
     dest.mkdir(parents=True, exist_ok=True)
     da_controllare = []
+    scartate = sum(1 for r in righe if r.get("scartata"))
+    righe = [r for r in righe if not r.get("scartata")]
     for r in righe:
         pred = r.get("pred") or {}
         righe_p = pred.get("righe") or []
@@ -107,7 +109,8 @@ def main() -> None:
         for r in da_controllare:
             w.writerow([r["id"], r["anno"], r["mese"], r["file"], r["pagine"][0], " | ".join(r["motivi"])])
     n, c = len(righe), len(da_controllare)
-    print(f"Schede lette: {n}; ok: {n - c}; da controllare: {c} ({c / max(n, 1):.0%})")
+    print(f"Schede lette: {n}; ok: {n - c}; da controllare: {c} ({c / max(n, 1):.0%}); "
+          f"pagine scartate perché non schede: {scartate}")
     motivi = {}
     for r in da_controllare:
         for m in r["motivi"]:

@@ -85,7 +85,7 @@ if os.environ.get("ADATTATORE"):
     from peft import PeftModel
     model = PeftModel.from_pretrained(model, os.environ["ADATTATORE"])
 proc_grande = AutoProcessor.from_pretrained(MODELLO, min_pixels=256 * 28 * 28, max_pixels=1600 * 28 * 28)
-proc_piccolo = AutoProcessor.from_pretrained(MODELLO, min_pixels=128 * 28 * 28, max_pixels=320 * 28 * 28)
+proc_piccolo = AutoProcessor.from_pretrained(MODELLO, min_pixels=256 * 28 * 28, max_pixels=768 * 28 * 28)
 
 
 def chiedi(immagini, testo, proc, max_token):
@@ -110,9 +110,9 @@ DOMANDA_CLASSE = ("Guarda la pagina e rispondi con UNA sola lettera.\n"
 LETTERE = {"A": "FRONTE", "B": "RETRO", "C": "DDT", "D": "ALTRO"}
 
 classi = json.load(open(CLASSI)) if os.path.exists(CLASSI) else {}
-if classi and classi.get("_versione") != 2:     # classificate con la domanda vecchia: si rifanno
+if classi and classi.get("_versione") != 3:     # classificate con la domanda vecchia: si rifanno
     classi = {}
-classi["_versione"] = 2
+classi["_versione"] = 3
 t0 = time.time()
 for i, p in enumerate(pagine):
     if p["pagina"] in classi:
@@ -162,8 +162,23 @@ with open(OUT, "a") as fo:
             # righe vuote ripetute (il modello a volte continua a riempire la tabella)
             pred["righe"] = [r for r in (pred.get("righe") or []) if isinstance(r, dict) and
                              (r.get("codice") or r.get("descrizione"))]
-            if str(pred.get("ditta") or pred.get("cliente")) in ("John Doe", "Mario Rossi"):
+            if pred.get("non_scheda"):
+                pred, motivi = None, ["non è una scheda"]
+            elif str(pred.get("ditta") or pred.get("cliente")) in ("John Doe", "Mario Rossi", "Compagnia Italiana") \
+                    or any(str(r.get("descrizione", "")).startswith("Componente ") for r in pred["righe"]):
                 pred, motivi = None, ["non è una scheda (risposta inventata dal modello)"]
+            elif not re.fullmatch(r"\s*\d{1,4}\s*/\s*\d{1,4}\s*", str(pred.get("riparazione_n") or "")):
+                if s["tipo"] == "solo retro":     # sul retro non c'è l'intestazione: valori inventati, si tolgono
+                    for c in ("riparazione_n", "data", "ditta", "articolo", "prodotto_il", "seriale", "firmware",
+                              "tempo_riparazione"):
+                        pred[c] = None
+                else:
+                    motivi.append("numero riparazione non valido")
+        if pred is None and motivi and motivi[0].startswith("non è una scheda"):
+            print(f"{k + 1}/{len(schede)} {s['id']} scartata: {motivi[0]}", flush=True)
+            fo.write(json.dumps({**s, "pred": None, "grezzo": None, "scartata": True, "da_controllare": False,
+                                 "motivi": motivi}, ensure_ascii=False) + "\n")
+            continue
         if pred is None and not motivi:
             motivi.append("JSON non valido")
         elif pred is not None:
