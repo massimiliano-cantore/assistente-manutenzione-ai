@@ -110,18 +110,24 @@ DOMANDA_CLASSE = ("Guarda la pagina e rispondi con UNA sola lettera.\n"
 LETTERE = {"A": "FRONTE", "B": "RETRO", "C": "DDT", "D": "ALTRO"}
 
 classi = json.load(open(CLASSI)) if os.path.exists(CLASSI) else {}
-if classi and classi.get("_versione") != 3:     # classificate con la domanda vecchia: si rifanno
+if classi and classi.get("_versione") != 4:     # classificate con la domanda vecchia: si rifanno
     classi = {}
-classi["_versione"] = 3
+classi["_versione"] = 4
 t0 = time.time()
 for i, p in enumerate(pagine):
     if p["pagina"] in classi:
         continue
-    r = chiedi([f"{CARTELLA_PAGINE}/{p['pagina']}"], DOMANDA_CLASSE, proc_piccolo, 3).strip().upper()
+    r = chiedi([f"{CARTELLA_PAGINE}/{p['pagina']}"], DOMANDA_CLASSE, proc_grande, 3).strip().upper()
     classi[p["pagina"]] = LETTERE.get(r[:1], "ALTRO")
     if i % 25 == 0:
         json.dump(classi, open(CLASSI, "w"))
         print(f"classificate {len(classi)}/{len(pagine)} ({time.time() - t0:.0f} s)", flush=True)
+json.dump(classi, open(CLASSI, "w"))
+# due retro di fila nello stesso PDF non esistono: il primo è un fronte letto male
+for i in range(1, len(pagine)):
+    a, b = pagine[i - 1], pagine[i]
+    if a["file"] == b["file"] and classi.get(a["pagina"]) == "RETRO" and classi.get(b["pagina"]) == "RETRO":
+        classi[a["pagina"]] = "FRONTE"
 json.dump(classi, open(CLASSI, "w"))
 valori = [v for k, v in classi.items() if k != "_versione"]
 print("Classi:", {c: valori.count(c) for c in set(valori)}, flush=True)
