@@ -99,26 +99,32 @@ def chiedi(immagini, testo, proc, max_token):
     return proc.batch_decode(out[:, inp.input_ids.shape[1]:], skip_special_tokens=True)[0]
 
 
-DOMANDA_CLASSE = ("Che pagina è? Rispondi con UNA parola.\n"
-                  "FRONTE = modulo prestampato OPERA con la scritta 'COPIA RIPARAZIONE', compilato a mano: in alto "
-                  "numero riparazione, cliente, articolo; sotto una tabella Codice/Descrizione/Intervento/Pz.\n"
-                  "RETRO = retro dello stesso modulo: riquadro NOTE scritto a mano, firma, 'eseguito il'.\n"
-                  "DDT = documento di trasporto, bolla, fattura, lettera, modulo di reso del cliente (anche in "
-                  "francese o altre lingue), e-mail, elenco prodotti.\n"
-                  "ALTRO = pagina bianca o altro.")
+DOMANDA_CLASSE = ("Guarda la pagina e rispondi con UNA sola lettera.\n"
+                  "A = in alto c'è un'intestazione stampata con 'Riparazione n.', 'Cliente', 'Articolo' (scheda di "
+                  "riparazione OPERA, 'COPIA RIPARAZIONE') e sotto una tabella Codice/Descrizione/Intervento/Pz.\n"
+                  "B = la pagina è soprattutto un grande riquadro NOTE scritto a mano, SENZA l'intestazione con cliente "
+                  "e articolo (retro della scheda).\n"
+                  "C = documento di trasporto, bolla, fattura, lettera, e-mail o modulo di un'altra azienda.\n"
+                  "D = pagina bianca o altro.\n"
+                  "Lettera:")
+LETTERE = {"A": "FRONTE", "B": "RETRO", "C": "DDT", "D": "ALTRO"}
 
 classi = json.load(open(CLASSI)) if os.path.exists(CLASSI) else {}
+if classi and classi.get("_versione") != 2:     # classificate con la domanda vecchia: si rifanno
+    classi = {}
+classi["_versione"] = 2
 t0 = time.time()
 for i, p in enumerate(pagine):
     if p["pagina"] in classi:
         continue
-    r = chiedi([f"{CARTELLA_PAGINE}/{p['pagina']}"], DOMANDA_CLASSE, proc_piccolo, 5).upper()
-    classi[p["pagina"]] = next((c for c in ("DDT", "FRONTE", "RETRO") if c in r), "ALTRO")
+    r = chiedi([f"{CARTELLA_PAGINE}/{p['pagina']}"], DOMANDA_CLASSE, proc_piccolo, 3).strip().upper()
+    classi[p["pagina"]] = LETTERE.get(r[:1], "ALTRO")
     if i % 25 == 0:
         json.dump(classi, open(CLASSI, "w"))
         print(f"classificate {len(classi)}/{len(pagine)} ({time.time() - t0:.0f} s)", flush=True)
 json.dump(classi, open(CLASSI, "w"))
-print("Classi:", {c: list(classi.values()).count(c) for c in set(classi.values())}, flush=True)
+valori = [v for k, v in classi.items() if k != "_versione"]
+print("Classi:", {c: valori.count(c) for c in set(valori)}, flush=True)
 
 # schede: FRONTE + RETRO successivo nello stesso PDF
 schede = []
