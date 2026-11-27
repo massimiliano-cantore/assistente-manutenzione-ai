@@ -101,7 +101,9 @@ def crea_app(componenti: Componenti | None = None, frontend: Path | None = FRONT
 
     @app.get("/api/documenti/cerca")
     def cerca_documenti(q: str):
-        return _indice().cerca(q[:200])
+        from app.documenti.indice import e_domanda
+        q = q[:300]
+        return _indice().cerca_domanda(q) if e_domanda(q) else _indice().cerca(q)
 
     @app.get("/api/documenti/apri")
     def apri_documento(p: str, request: Request):

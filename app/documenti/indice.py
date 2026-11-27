@@ -292,6 +292,62 @@ class IndiceDocumenti:
                 termini.append('"' + " ".join(pezzi) + '"*')
         return " AND ".join(termini)
 
+    def _con_termine(self, termine: str, limite: int = 2000) -> set[str]:
+        """Documenti che contengono il termine (testo, titolo, cartelle) o lo hanno nel percorso."""
+        out = set()
+        q = self._query_fts(termine)
+        if q:
+            out |= {p for (p,) in self.db.execute("SELECT percorso FROM testi WHERE testi MATCH ? LIMIT ?",
+                                                  (q, limite))}
+        out |= {p for (p,) in self.db.execute("SELECT percorso FROM meta WHERE lower(percorso) LIKE ? LIMIT ?",
+                                              (f"%{termine.lower()}%", limite))}
+        return out
+
+    def cerca_domanda(self, domanda: str, limite: int = 300) -> dict:
+        """Ricerca da una frase ("trova lo schema di collegamento della 2560035 con la consolle 54612"):
+        i documenti devono riguardare TUTTI i codici citati; le altre parole (collegamento, consolle...) e il tipo
+        di documento chiesto ordinano i risultati. Se nessun documento ha tutti i codici, si mostrano quelli con
+        il maggior numero di codici, avvisando."""
+        d = interpreta_domanda(domanda)
+        if not d["codici"] and not d["parole"]:
+            return {**self.cerca(domanda, limite), "domanda": d}
+        per_codice = {c: self._con_termine(c) for c in d["codici"]}
+        per_parola = {w: self._con_termine(w) for w in d["parole"]}
+        if per_codice:
+            conta: dict[str, int] = {}
+            for docs in per_codice.values():
+                for x in docs:
+                    conta[x] = conta.get(x, 0) + 1
+            massimo = max(conta.values(), default=0)
+            candidati = {x for x, n in conta.items() if n == massimo}
+            d["tutti_i_codici"] = massimo == len(per_codice)
+            d["codici_mancanti"] = [] if d["tutti_i_codici"] else \
+                [c for c, docs in per_codice.items() if not docs & candidati]
+        else:   # solo parole: devono esserci tutte
+            candidati = set.intersection(*per_parola.values()) if per_parola else set()
+            d["tutti_i_codici"] = True
+        if not candidati:
+            return {"istruzioni": [], "schemi": [], "altri": [], "totale": 0, "proposti": [], "domanda": d}
+        segnaposti = ",".join("?" * len(candidati))
+        righe = self.db.execute(f"SELECT percorso, nome, titolo, data, categoria, prodotto, gruppo, estensione, "
+                                f"estratto FROM meta WHERE percorso IN ({segnaposti})", list(candidati)).fetchall()
+        docs = [dict(zip(("percorso", "nome", "titolo", "data", "categoria", "prodotto", "gruppo", "estensione",
+                          "estratto"), r, strict=True)) for r in righe]
+        for doc in docs:
+            parole_ok = sum(doc["percorso"] in v for v in per_parola.values())
+            nel_titolo = sum(w in doc["titolo"].lower() for w in d["parole"])
+            doc["punteggio"] = -(parole_ok * 2 + nel_titolo * 3 + (5 if doc["categoria"] == d["tipo"] else 0))
+        proposti = sorted(docs, key=lambda x: (x["punteggio"], x["data"]), reverse=False)
+        migliore = proposti[0]["punteggio"]
+        proposti = [x for x in proposti if x["punteggio"] == migliore][:10]
+        proposti.sort(key=lambda x: x["data"], reverse=True)
+        return {"istruzioni": self._ultime_versioni([x for x in docs if x["categoria"] == "istruzioni"]),
+                "schemi": sorted((x for x in docs if x["categoria"] == "schemi"), key=lambda x: x["data"],
+                                 reverse=True),
+                "altri": sorted((x for x in docs if x["categoria"] == "altri"),
+                                key=lambda x: (x["punteggio"], -int(x["data"].replace("-", "")))),
+                "totale": len(docs), "proposti": proposti, "domanda": d}
+
     def cerca(self, testo: str, limite: int = 300) -> dict:
         testo = testo.strip()
         if not testo:
@@ -339,6 +395,45 @@ class IndiceDocumenti:
     def statistiche(self) -> dict:
         per = dict(self.db.execute("SELECT categoria, COUNT(*) FROM meta GROUP BY categoria").fetchall())
         return {"documenti": sum(per.values()), **per}
+
+
+# --- domande in linguaggio naturale -----------------------------------------------------------------------------
+
+PAROLE_VUOTE = set("""trova trovami cerca cercami cercare dammi dai mostra mostrami fammi vedere voglio vorrei serve
+servono mi ci si il lo la i gli le un uno una di del dello della dei degli delle da dal dallo dalla dai dagli dalle
+in nel nello nella nei negli nelle con col coi su sul sullo sulla sui sugli sulle per tra fra a al allo alla ai agli
+alle e ed o od che chi cosa quale quali dove come c è e' ha hanno sono c'è tutti tutte tutto ogni anche
+documento documenti file articolo articoli codice prodotto modello per favore grazie""".split())
+TIPI_DOCUMENTO = {
+    "schemi": re.compile(r"^(schem|elettric|collegament|cablagg|wiring|circuit|layout|sch$)"),
+    "istruzioni": re.compile(r"^(istruz|manual|montagg|installaz|guida|uso$|procedur|libretto)"),
+}
+CODICE = re.compile(r"^[\w./-]*\d[\w./-]*$")
+
+
+def interpreta_domanda(testo: str) -> dict:
+    """Da una frase ricava codici (parole con cifre, es. 2560035, 54612, SP112A), parole utili e tipo di
+    documento chiesto (schemi o istruzioni). Niente AI: veloce e gratis anche per i colleghi."""
+    codici, parole, tipo = [], [], None
+    for w in re.findall(r"[\w./'-]+", testo.lower()):
+        w = w.strip(".'-")
+        if not w or w in PAROLE_VUOTE:
+            continue
+        if CODICE.match(w) and len(re.sub(r"\D", "", w)) >= 3:
+            codici.append(w.upper())
+            continue
+        for t, rx in TIPI_DOCUMENTO.items():
+            if rx.match(w):
+                tipo = tipo or t
+        if len(w) > 2:
+            parole.append(w)
+    return {"codici": list(dict.fromkeys(codici)), "parole": list(dict.fromkeys(parole)), "tipo": tipo}
+
+
+def e_domanda(testo: str) -> bool:
+    """Frase (almeno tre parole, o due con una parola vuota tipo 'della') invece di un codice o una parola."""
+    parole = re.findall(r"[\w'-]+", testo.lower())
+    return len(parole) >= 3 or any(w in PAROLE_VUOTE for w in parole)
 
 
 def schemi_da_prodotti_yaml(radice: Path, radice_indice: Path | None = None) -> set[str]:

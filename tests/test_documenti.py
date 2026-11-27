@@ -131,3 +131,23 @@ def test_cartelle_in_altre_posizioni(tmp_path):
     percorsi = [d["percorso"] for k in ("istruzioni", "schemi", "altri") for d in r[k]]
     assert len(percorsi) == 2 and all(i.file_di(p) for p in percorsi)
     assert i.file_di(str(tmp_path / "elenco.txt")) is None          # fuori dalle cartelle: non si apre
+
+
+def test_domanda_in_linguaggio_naturale(tmp_path):
+    from app.documenti.indice import IndiceDocumenti, e_domanda, interpreta_domanda
+    d = interpreta_domanda("trova lo schema di collegamento della 2560035 con la consolle 54612")
+    assert d["codici"] == ["2560035", "54612"] and d["tipo"] == "schemi" and "consolle" in d["parole"]
+    assert e_domanda("schema della 2560035") and not e_domanda("2560035")
+
+    cart = tmp_path / "Doc" / "Collegamenti"
+    cart.mkdir(parents=True)
+    (cart / "Schema collegamento 2560035 consolle 54612.txt").write_text("cablaggio", encoding="utf-8")
+    (cart / "Schema collegamento 2560035 alimentatore.txt").write_text("cablaggio", encoding="utf-8")
+    (cart / "Istruzioni 2560035.txt").write_text("montaggio consolle 54612", encoding="utf-8")
+    i = IndiceDocumenti(tmp_path / "i.db", tmp_path / "Doc")
+    i.aggiorna()
+    r = i.cerca_domanda("trova lo schema di collegamento della 2560035 con la consolle 54612")
+    assert r["domanda"]["tutti_i_codici"] and r["totale"] == 2          # solo i documenti con entrambi i codici
+    assert [x["nome"] for x in r["proposti"]] == ["Schema collegamento 2560035 consolle 54612.txt"]
+    r = i.cerca_domanda("schema della 2560035 con la consolle 99999")
+    assert not r["domanda"]["tutti_i_codici"] and r["domanda"]["codici_mancanti"] == ["99999"]
