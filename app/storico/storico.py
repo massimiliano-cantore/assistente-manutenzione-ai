@@ -31,7 +31,7 @@ SINONIMI = {
     "firmware": ["firmware", "fw", "versione_firmware", "versione_fw"],
     "note": ["note", "difetto", "difetto_riscontrato", "diagnosi", "guasto", "sintomo", "descrizione_guasto",
              "lavori_eseguiti", "osservazioni"],
-    "tempo": ["tempo_riparazione", "tempo", "minuti", "ore"],
+    "tempo": ["tempo_riparazione", "tempo_riparazione_min", "tempo", "minuti", "ore"],
     "aperta": ["aperta_manomessa", "manomessa", "aperta"],
 }
 SINONIMI_RIGHE = {

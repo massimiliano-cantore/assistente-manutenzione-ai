@@ -100,8 +100,8 @@ def chiedi(immagini, testo, proc, max_token):
 
 
 DOMANDA_CLASSE = ("Che pagina è? Rispondi con UNA parola.\n"
-                  "FRONTE = modulo prestampato OPERA 'SCHEDA DI RIPARAZIONE' compilato a mano: in alto numero "
-                  "riparazione, cliente, articolo; sotto una tabella Codice/Descrizione/Intervento.\n"
+                  "FRONTE = modulo prestampato OPERA con la scritta 'COPIA RIPARAZIONE', compilato a mano: in alto "
+                  "numero riparazione, cliente, articolo; sotto una tabella Codice/Descrizione/Intervento/Pz.\n"
                   "RETRO = retro dello stesso modulo: riquadro NOTE scritto a mano, firma, 'eseguito il'.\n"
                   "DDT = documento di trasporto, bolla, fattura, lettera, modulo di reso del cliente (anche in "
                   "francese o altre lingue), e-mail, elenco prodotti.\n"
@@ -136,7 +136,7 @@ if os.environ.get("MAX_SCHEDE"):
     schede = schede[:int(os.environ["MAX_SCHEDE"])]
 print(len(schede), "schede da leggere", flush=True)
 
-STAMPATI = ["riparazione_n", "data", "cliente", "articolo"]
+STAMPATI = ["riparazione_n", "articolo"]
 fatti = {json.loads(r)["id"] for r in open(OUT)} if os.path.exists(OUT) else set()
 with open(OUT, "a") as fo:
     for k, s in enumerate(schede):
@@ -154,7 +154,7 @@ with open(OUT, "a") as fo:
             # righe vuote ripetute (il modello a volte continua a riempire la tabella)
             pred["righe"] = [r for r in (pred.get("righe") or []) if isinstance(r, dict) and
                              (r.get("codice") or r.get("descrizione"))]
-            if str(pred.get("cliente")) in ("John Doe", "Mario Rossi"):
+            if str(pred.get("ditta") or pred.get("cliente")) in ("John Doe", "Mario Rossi"):
                 pred, motivi = None, ["non è una scheda (risposta inventata dal modello)"]
         if pred is None and not motivi:
             motivi.append("JSON non valido")

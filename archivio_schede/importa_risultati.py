@@ -13,7 +13,38 @@ import json
 import sys
 from pathlib import Path
 
+DATE = ("data", "ricevuto_il", "ddt_del")
 COSTO_SCHEDA_LOTTI = {"Sonnet": 0.04, "Haiku": 0.013}   # $ indicativi a scheda con la Batch API
+
+
+def completa_idem(righe: list[dict]) -> list[dict]:
+    """Virgolette o 'n' in una cella = valore della riga sopra; '" (ROTTO)' = azione sopra + nuova causa."""
+    import re
+    sopra: dict = {}
+    for r in righe:
+        for k in ("codice", "descrizione", "intervento"):
+            v = str(r.get(k) or "").strip()
+            m = re.fullmatch(r"(?:\"|''|“|”|n|N)\s*(\(.*\))?", v)
+            if m and sopra.get(k):
+                base = re.sub(r"\s*\(.*\)$", "", sopra[k]) if m[1] else sopra[k]
+                r[k] = f"{base} {m[1]}" if m[1] else base
+        sopra = {k: str(r.get(k) or "") for k in ("codice", "descrizione", "intervento")}
+    return righe
+
+
+def anno_coerente(data: str | None, anno: str, mese: str = "") -> str | None:
+    """Data successiva al mese della cartella (es. 20/12/2025 in '2025/01 - Gennaio'): è dell'anno prima,
+    il tecnico o il modello hanno sbagliato l'anno."""
+    import re
+    m = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{2,4})", str(data or "").strip())
+    mm = re.match(r"\d{1,2}", mese or "")
+    if not m or not anno.isdigit():
+        return data
+    a = int(m[3]) + (2000 if len(m[3]) == 2 else 0)
+    limite = (int(anno), int(mm.group()) + 1 if mm else 12)       # un mese di tolleranza
+    if (a, int(m[2])) > limite and a - 1 >= int(anno) - 1:
+        return f"{int(m[1]):02d}/{int(m[2]):02d}/{a - 1}"
+    return data
 
 
 def main() -> None:
@@ -32,7 +63,9 @@ def main() -> None:
             continue
         scheda = {"formato": "docai-scheda/1", "id": r["id"], "file_origine": r["file"], "lettore": "qwen2.5-vl-7b",
                   "da_controllare": r["da_controllare"], "motivi": r["motivi"], "pagine": r["pagine"],
-                  "campi": {k: v for k, v in pred.items() if k != "righe"}, "righe": pred.get("righe") or []}
+                  "campi": {k: (anno_coerente(v, r["anno"], r.get("mese", "")) if k in DATE else v)
+                            for k, v in pred.items() if k != "righe"},
+                  "righe": completa_idem(pred.get("righe") or [])}
         (dest / r["anno"]).mkdir(exist_ok=True)
         (dest / r["anno"] / f"{r['id']}.json").write_text(json.dumps(scheda, ensure_ascii=False, indent=1),
                                                          encoding="utf-8")
