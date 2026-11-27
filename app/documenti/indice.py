@@ -304,30 +304,28 @@ class IndiceDocumenti:
         return out
 
     def cerca_domanda(self, domanda: str, limite: int = 300) -> dict:
-        """Ricerca da una frase ("trova lo schema di collegamento della 2560035 con la consolle 54612"):
-        i documenti devono riguardare TUTTI i codici citati; le altre parole (collegamento, consolle...) e il tipo
-        di documento chiesto ordinano i risultati. Se nessun documento ha tutti i codici, si mostrano quelli con
-        il maggior numero di codici, avvisando."""
+        """Ricerca da una frase ("trova lo schema di collegamento della 2560035 con la consolle 54612").
+        Si tengono i documenti del tipo chiesto (schemi, istruzioni) che citano più codici della domanda: prima
+        quelli con tutti i codici, altrimenti quelli con il maggior numero, avvisando quali mancano. Un codice con
+        lettere finali (54610A) vale anche senza (54610). Gli elenchi (codici a barre, listini) si scartano."""
         d = interpreta_domanda(domanda)
         if not d["codici"] and not d["parole"]:
             return {**self.cerca(domanda, limite), "domanda": d}
-        per_codice = {c: self._con_termine(c) for c in d["codici"]}
+        vuoto = {"istruzioni": [], "schemi": [], "altri": [], "totale": 0, "proposti": [], "domanda": d}
+        per_codice = {}
+        for c in d["codici"]:
+            trovati = self._con_termine(c)
+            base = re.sub(r"[A-Z]+$", "", c)
+            if base != c and len(re.sub(r"\D", "", base)) >= 4:
+                trovati |= self._con_termine(base)
+            per_codice[c] = trovati
         per_parola = {w: self._con_termine(w) for w in d["parole"]}
         if per_codice:
-            conta: dict[str, int] = {}
-            for docs in per_codice.values():
-                for x in docs:
-                    conta[x] = conta.get(x, 0) + 1
-            massimo = max(conta.values(), default=0)
-            candidati = {x for x, n in conta.items() if n == massimo}
-            d["tutti_i_codici"] = massimo == len(per_codice)
-            d["codici_mancanti"] = [] if d["tutti_i_codici"] else \
-                [c for c, docs in per_codice.items() if not docs & candidati]
-        else:   # solo parole: devono esserci tutte
+            candidati = set().union(*per_codice.values())
+        else:
             candidati = set.intersection(*per_parola.values()) if per_parola else set()
-            d["tutti_i_codici"] = True
         if not candidati:
-            return {"istruzioni": [], "schemi": [], "altri": [], "totale": 0, "proposti": [], "domanda": d}
+            return vuoto
         segnaposti = ",".join("?" * len(candidati))
         righe = self.db.execute(f"SELECT percorso, nome, titolo, data, categoria, prodotto, gruppo, estensione, "
                                 f"estratto FROM meta WHERE percorso IN ({segnaposti})", list(candidati)).fetchall()
@@ -345,30 +343,29 @@ class IndiceDocumenti:
             foglio = doc["estensione"] in FOGLI      # un foglio di calcolo non è uno schema né un manuale
             doc["tipo_ok"] = bool(d["tipo"] and (doc["categoria"] == d["tipo"] or (not foglio and rx_nome and (
                 rx_nome.search(nome) or rx_testo.search(testo[:5000].lower())))))
+            doc["codici_trovati"] = [c for c, v in per_codice.items() if doc["percorso"] in v]
             parole_ok = sum(doc["percorso"] in v for v in per_parola.values())
             nel_titolo = sum(w in nome for w in d["parole"])
-            doc["punteggio"] = -(parole_ok * 2 + nel_titolo * 3 + (8 if doc["tipo_ok"] else 0)
-                                 - (10 if doc["elenco"] else 0))
-        idonei = [x for x in docs if not x["elenco"] and (x["tipo_ok"] or not d["tipo"])]
-        proposti = []
-        if idonei:
-            idonei.sort(key=lambda x: x["punteggio"])
-            migliore = idonei[0]["punteggio"]
-            proposti = sorted((x for x in idonei if x["punteggio"] == migliore), key=lambda x: x["data"],
-                              reverse=True)[:10]
-        esclusi = sum(x["elenco"] for x in docs)
-        d["elenchi_esclusi"] = esclusi
-        docs = [x for x in docs if not x["elenco"]]
-        if d["tipo"]:      # chiesto un tipo preciso: sotto si mostrano solo i documenti di quel tipo
-            d["altri_esclusi"] = sum(not x["tipo_ok"] for x in docs)
-            docs = [x for x in docs if x["tipo_ok"]]
-        return {"istruzioni": self._ultime_versioni([x for x in docs if x["categoria"] == "istruzioni"]),
-                "schemi": sorted((x for x in docs if x["categoria"] == "schemi"), key=lambda x: x["data"],
+            doc["punteggio"] = -(parole_ok * 2 + nel_titolo * 3)
+        d["elenchi_esclusi"] = sum(x["elenco"] for x in docs)
+        pool = [x for x in docs if not x["elenco"] and (x["tipo_ok"] or not d["tipo"])]
+        d["altri_esclusi"] = sum(not x["elenco"] and not x["tipo_ok"] for x in docs) if d["tipo"] else 0
+        if not pool:
+            return vuoto
+        massimo = max(len(x["codici_trovati"]) for x in pool)
+        if per_codice:
+            pool = [x for x in pool if len(x["codici_trovati"]) == massimo]
+        d["tutti_i_codici"] = massimo == len(per_codice)
+        d["codici_mancanti"] = [c for c in per_codice if not any(c in x["codici_trovati"] for x in pool)]
+        pool.sort(key=lambda x: x["punteggio"])
+        migliore = pool[0]["punteggio"]
+        proposti = sorted((x for x in pool if x["punteggio"] == migliore), key=lambda x: x["data"], reverse=True)[:10]
+        return {"istruzioni": self._ultime_versioni([x for x in pool if x["categoria"] == "istruzioni"]),
+                "schemi": sorted((x for x in pool if x["categoria"] == "schemi"), key=lambda x: x["data"],
                                  reverse=True),
-                "altri": sorted((x for x in docs if x["categoria"] == "altri"),
+                "altri": sorted((x for x in pool if x["categoria"] == "altri"),
                                 key=lambda x: (x["punteggio"], -int(x["data"].replace("-", "")))),
-                "totale": len(docs), "proposti": proposti, "domanda": d}
-
+                "totale": len(pool), "proposti": proposti, "domanda": d}
 
     def cerca(self, testo: str, limite: int = 300) -> dict:
         testo = testo.strip()

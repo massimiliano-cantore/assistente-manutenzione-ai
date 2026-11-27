@@ -56,7 +56,7 @@ function proposta(j) {
   if (!j.proposti || !j.proposti.length)
     testa = `Non ho trovato ${cosa} su <b>${esc(su)}</b>.`;
   else if (d.codici.length > 1 && !d.tutti_i_codici)
-    testa = `Nessun documento riguarda insieme ${d.codici.map(esc).join(" e ")}: ${d.codici_mancanti.map(esc).join(", ")} non compare. Questi sono i più vicini:`;
+    testa = `Nessuno ${cosa === "documenti" ? "dei documenti" : "degli " + cosa} cita insieme ${d.codici.map(esc).join(" e ")}: ${d.codici_mancanti.map(esc).join(", ")} non compare. Questi citano ${d.codici.filter(c => !d.codici_mancanti.includes(c)).map(esc).join(" e ")}:`;
   else
     testa = j.proposti.length === 1 ? `Ho trovato questo documento su <b>${esc(su)}</b>:` : `Ho trovato ${j.proposti.length} documenti su <b>${esc(su)}</b>:`;
   const note = [];

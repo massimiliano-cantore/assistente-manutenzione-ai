@@ -180,3 +180,15 @@ def test_foglio_codici_a_barre_non_e_uno_schema(tmp_path):
     i.aggiorna()
     r = i.cerca_domanda("schema di collegamento elettrico tra 54610A e 2560030")
     assert r["proposti"] == [] and r["totale"] == 0
+
+
+def test_domanda_codice_con_lettera_e_codici_parziali(tmp_path):
+    from app.documenti.indice import IndiceDocumenti
+    cart = tmp_path / "Doc" / "Michele_schemi" / "54610"
+    cart.mkdir(parents=True)
+    (cart / "54610 + 54611 + IE.txt").write_text("consolle", encoding="utf-8")
+    i = IndiceDocumenti(tmp_path / "i.db", tmp_path / "Doc")
+    i.aggiorna()
+    r = i.cerca_domanda("schema di collegamento elettrico tra 54610A e 2560030")
+    assert [x["nome"] for x in r["proposti"]] == ["54610 + 54611 + IE.txt"]
+    assert r["domanda"]["codici_mancanti"] == ["2560030"]
