@@ -95,13 +95,17 @@ def chiedi(immagini, testo, proc, max_token):
     img, vid = process_vision_info(msg)
     inp = proc(text=[t], images=img, videos=vid, return_tensors="pt").to(model.device)
     with torch.no_grad():
-        out = model.generate(**inp, max_new_tokens=max_token, do_sample=False)
+        out = model.generate(**inp, max_new_tokens=max_token, do_sample=False, repetition_penalty=1.05)
     return proc.batch_decode(out[:, inp.input_ids.shape[1]:], skip_special_tokens=True)[0]
 
 
-DOMANDA_CLASSE = ("Che pagina è? Rispondi con UNA parola: DDT (documento di trasporto / bolla), FRONTE (fronte di una "
-                  "scheda di riparazione: intestazione con numero riparazione, cliente, articolo e tabella codici), "
-                  "RETRO (retro della scheda: NOTE, continuazione tabella, eseguito il), ALTRO.")
+DOMANDA_CLASSE = ("Che pagina è? Rispondi con UNA parola.\n"
+                  "FRONTE = modulo prestampato OPERA 'SCHEDA DI RIPARAZIONE' compilato a mano: in alto numero "
+                  "riparazione, cliente, articolo; sotto una tabella Codice/Descrizione/Intervento.\n"
+                  "RETRO = retro dello stesso modulo: riquadro NOTE scritto a mano, firma, 'eseguito il'.\n"
+                  "DDT = documento di trasporto, bolla, fattura, lettera, modulo di reso del cliente (anche in "
+                  "francese o altre lingue), e-mail, elenco prodotti.\n"
+                  "ALTRO = pagina bianca o altro.")
 
 classi = json.load(open(CLASSI)) if os.path.exists(CLASSI) else {}
 t0 = time.time()
@@ -124,8 +128,10 @@ for i, p in enumerate(pagine):
     retro = None
     if i + 1 < len(pagine) and pagine[i + 1]["file"] == p["file"] and classi.get(pagine[i + 1]["pagina"]) == "RETRO":
         retro = pagine[i + 1]["pagina"]
+    if not retro:      # le schede vere hanno sempre fronte e retro: una pagina sola è quasi sempre altro
+        continue
     schede.append({"id": p["pagina"][:-4], "file": p["file"], "anno": p["anno"], "mese": p["mese"],
-                   "pagine": [p["pagina"]] + ([retro] if retro else [])})
+                   "pagine": [p["pagina"], retro]})
 if os.environ.get("MAX_SCHEDE"):
     schede = schede[:int(os.environ["MAX_SCHEDE"])]
 print(len(schede), "schede da leggere", flush=True)
@@ -144,12 +150,23 @@ with open(OUT, "a") as fo:
         except json.JSONDecodeError:
             pred = None
         motivi = []
-        if pred is None:
+        if pred is not None:
+            # righe vuote ripetute (il modello a volte continua a riempire la tabella)
+            pred["righe"] = [r for r in (pred.get("righe") or []) if isinstance(r, dict) and
+                             (r.get("codice") or r.get("descrizione"))]
+            if str(pred.get("cliente")) in ("John Doe", "Mario Rossi"):
+                pred, motivi = None, ["non è una scheda (risposta inventata dal modello)"]
+        if pred is None and not motivi:
             motivi.append("JSON non valido")
-        else:
+        elif pred is not None:
             motivi += [f"manca {c}" for c in STAMPATI if not pred.get(c)]
-            if pred.get("campi_incerti"):
-                motivi.append("incerti: " + ", ".join(map(str, pred["campi_incerti"]))[:200])
+            if not pred["righe"]:
+                motivi.append("nessuna riga nella tabella")
+            elif any(not str(r.get("codice") or "").strip() for r in pred["righe"]):
+                motivi.append("righe senza codice")
+            incerti_codici = [c for c in (pred.get("campi_incerti") or []) if "codice" in str(c)]
+            if incerti_codici:
+                motivi.append("codici incerti: " + ", ".join(map(str, incerti_codici))[:150])
         fo.write(json.dumps({**s, "pred": pred, "grezzo": None if pred else grezzo, "da_controllare": bool(motivi),
                              "motivi": motivi, "secondi": round(time.time() - t, 1)}, ensure_ascii=False) + "\n")
         fo.flush()

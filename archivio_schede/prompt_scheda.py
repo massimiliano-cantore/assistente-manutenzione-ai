@@ -4,14 +4,14 @@ Molti campi sono scritti a mano in stampatello, spesso in modo poco leggibile.
 
 Restituisci SOLO un oggetto JSON con queste chiavi:
 {
- "riparazione_n": "es. 36/08", "data": "gg/mm/aaaa", "cliente": "...", "articolo": "...", "pezzi": intero,
+ "riparazione_n": "numero stampato in alto", "data": "gg/mm/aaaa", "cliente": "...", "articolo": "...", "pezzi": intero,
  "ricevuto_il": "gg/mm/aaaa", "ddt_n": "..." o null, "ddt_del": "gg/mm/aaaa" o null,
  "prodotto_il": "mm/aaaa" o null, "seriale": "..." o null, "aperta_manomessa": true/false/null,
  "tempo_riparazione_min": intero o null, "firmware": "..." o null,
  "righe": [{"codice": "...", "descrizione": "...", "intervento": "...", "causa": "..." o null, "pz": intero}],
  "note": "testo delle NOTE (retro), righe separate da \\n" o null,
  "eseguito_il": "gg/mm/aaaa" o null,
- "campi_incerti": ["nomi dei campi che hai letto con poca sicurezza, es. seriale, righe[1].codice"]
+ "campi_incerti": ["solo i campi che non riesci davvero a leggere; lista vuota se è tutto leggibile"]
 }
 
 Regole:
