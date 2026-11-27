@@ -30,6 +30,8 @@ Regole:
   Se non capisci quale lettera è segnata scrivi "?" più la causa e metti il campo in campi_incerti.
 - I codici sono di solito come 01327W00, 00162B00, SCA4660, SL480, 0603/1184, 10001V00: le lettere O in fondo
   dopo una lettera sono zeri (00244F00, non 00244 FOO); scrivi i codici senza spazi.
+- Spesso la tabella è vuota e il lavoro è descritto solo nelle note: in quel caso "righe": [] e trascrivi bene
+  le note. Non spostare nella tabella quello che è scritto nelle note.
 - La tabella può continuare sul retro: riporta tutte le righe compilate in ordine, e SOLO quelle compilate
   (niente righe vuote).
 - IDEM: se in una cella ci sono le virgolette o una 'n' NON completarla tu: scrivi il segno così com'è, con

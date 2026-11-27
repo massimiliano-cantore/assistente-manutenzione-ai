@@ -160,9 +160,10 @@ with open(OUT, "a") as fo:
             motivi.append("JSON non valido")
         elif pred is not None:
             motivi += [f"manca {c}" for c in STAMPATI if not pred.get(c)]
-            if not pred["righe"]:
-                motivi.append("nessuna riga nella tabella")
-            elif any(not str(r.get("codice") or "").strip() for r in pred["righe"]):
+            nota = str(pred.get("note") or "").strip().lower() not in ("", "null", "none")
+            if not pred["righe"] and not nota:     # tabella vuota con le note è normale; senza niente no
+                motivi.append("né righe né note")
+            elif pred["righe"] and any(not str(r.get("codice") or "").strip() for r in pred["righe"]):
                 motivi.append("righe senza codice")
             incerti_codici = [c for c in (pred.get("campi_incerti") or []) if "codice" in str(c)]
             if incerti_codici:
