@@ -333,20 +333,40 @@ class IndiceDocumenti:
                                 f"estratto FROM meta WHERE percorso IN ({segnaposti})", list(candidati)).fetchall()
         docs = [dict(zip(("percorso", "nome", "titolo", "data", "categoria", "prodotto", "gruppo", "estensione",
                           "estratto"), r, strict=True)) for r in righe]
+        testi = dict(self.db.execute(f"SELECT percorso, testo FROM testi WHERE percorso IN ({segnaposti})",
+                                     list(candidati)).fetchall())
+        rx_tipo = TIPI_DOCUMENTO_TESTO.get(d["tipo"])
         for doc in docs:
+            testo = testi.get(doc["percorso"], "") or ""
+            nome = (doc["titolo"] + " " + doc["percorso"]).lower()
+            # elenchi (codici a barre, listini, distinte di magazzino): tanti codici diversi, nessun legame col tipo
+            doc["elenco"] = len(set(re.findall(r"\b\d{5,7}\b", testo))) > 40
+            doc["tipo_ok"] = bool(d["tipo"] and (doc["categoria"] == d["tipo"] or (rx_tipo and (
+                rx_tipo.search(nome) or rx_tipo.search(testo[:3000].lower())))))
             parole_ok = sum(doc["percorso"] in v for v in per_parola.values())
-            nel_titolo = sum(w in doc["titolo"].lower() for w in d["parole"])
-            doc["punteggio"] = -(parole_ok * 2 + nel_titolo * 3 + (5 if doc["categoria"] == d["tipo"] else 0))
-        proposti = sorted(docs, key=lambda x: (x["punteggio"], x["data"]), reverse=False)
-        migliore = proposti[0]["punteggio"]
-        proposti = [x for x in proposti if x["punteggio"] == migliore][:10]
-        proposti.sort(key=lambda x: x["data"], reverse=True)
+            nel_titolo = sum(w in nome for w in d["parole"])
+            doc["punteggio"] = -(parole_ok * 2 + nel_titolo * 3 + (8 if doc["tipo_ok"] else 0)
+                                 - (10 if doc["elenco"] else 0))
+        idonei = [x for x in docs if not x["elenco"] and (x["tipo_ok"] or not d["tipo"])]
+        proposti = []
+        if idonei:
+            idonei.sort(key=lambda x: x["punteggio"])
+            migliore = idonei[0]["punteggio"]
+            proposti = sorted((x for x in idonei if x["punteggio"] == migliore), key=lambda x: x["data"],
+                              reverse=True)[:10]
+        esclusi = sum(x["elenco"] for x in docs)
+        d["elenchi_esclusi"] = esclusi
+        docs = [x for x in docs if not x["elenco"]]
+        if d["tipo"]:      # chiesto un tipo preciso: sotto si mostrano solo i documenti di quel tipo
+            d["altri_esclusi"] = sum(not x["tipo_ok"] for x in docs)
+            docs = [x for x in docs if x["tipo_ok"]]
         return {"istruzioni": self._ultime_versioni([x for x in docs if x["categoria"] == "istruzioni"]),
                 "schemi": sorted((x for x in docs if x["categoria"] == "schemi"), key=lambda x: x["data"],
                                  reverse=True),
                 "altri": sorted((x for x in docs if x["categoria"] == "altri"),
                                 key=lambda x: (x["punteggio"], -int(x["data"].replace("-", "")))),
                 "totale": len(docs), "proposti": proposti, "domanda": d}
+
 
     def cerca(self, testo: str, limite: int = 300) -> dict:
         testo = testo.strip()
@@ -407,6 +427,11 @@ documento documenti file articolo articoli codice prodotto modello per favore gr
 TIPI_DOCUMENTO = {
     "schemi": re.compile(r"^(schem|elettric|collegament|cablagg|wiring|circuit|layout|sch$)"),
     "istruzioni": re.compile(r"^(istruz|manual|montagg|installaz|guida|uso$|procedur|libretto)"),
+}
+# come riconoscere nel nome o nelle prime righe un documento del tipo chiesto, anche se non è nella categoria
+TIPI_DOCUMENTO_TESTO = {
+    "schemi": re.compile(r"schem|collegament|cablagg|wiring|morsett|elettric|connession"),
+    "istruzioni": re.compile(r"istruz|manual|montagg|installaz|guida|libretto|procedur"),
 }
 CODICE = re.compile(r"^[\w./-]*\d[\w./-]*$")
 

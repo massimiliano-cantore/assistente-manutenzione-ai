@@ -59,7 +59,11 @@ function proposta(j) {
     testa = `Nessun documento riguarda insieme ${d.codici.map(esc).join(" e ")}: ${d.codici_mancanti.map(esc).join(", ")} non compare. Questi sono i più vicini:`;
   else
     testa = j.proposti.length === 1 ? `Ho trovato questo documento su <b>${esc(su)}</b>:` : `Ho trovato ${j.proposti.length} documenti su <b>${esc(su)}</b>:`;
-  return `<section class="proposta"><h2>Risposta</h2><p>${testa}</p>${(j.proposti || []).map(x => riga(x)).join("")}</section>`;
+  const note = [];
+  if (d.elenchi_esclusi) note.push(`${d.elenchi_esclusi} elenchi (codici a barre, listini, distinte)`);
+  if (d.altri_esclusi) note.push(`${d.altri_esclusi} documenti che non sono ${cosa}`);
+  const nota = note.length ? `<p class="data">Non mostrati: ${note.join(" e ")} che citano gli stessi codici. Per vederli cerca solo i codici.</p>` : "";
+  return `<section class="proposta"><h2>Risposta</h2><p>${testa}</p>${(j.proposti || []).map(x => riga(x)).join("")}${nota}</section>`;
 }
 async function cerca(testo) {
   if (!testo.trim()) return;

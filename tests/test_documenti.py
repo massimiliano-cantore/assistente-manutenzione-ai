@@ -151,3 +151,18 @@ def test_domanda_in_linguaggio_naturale(tmp_path):
     assert [x["nome"] for x in r["proposti"]] == ["Schema collegamento 2560035 consolle 54612.txt"]
     r = i.cerca_domanda("schema della 2560035 con la consolle 99999")
     assert not r["domanda"]["tutti_i_codici"] and r["domanda"]["codici_mancanti"] == ["99999"]
+
+
+def test_domanda_esclude_elenchi(tmp_path):
+    from app.documenti.indice import IndiceDocumenti
+    cart = tmp_path / "Doc" / "Varie"
+    cart.mkdir(parents=True)
+    codici = " ".join(str(2500000 + k) for k in range(80))
+    (cart / "Codici a barre.txt").write_text(f"2560035 54612 {codici}", encoding="utf-8")
+    (cart / "Listino consolle.txt").write_text("consolle 54612 per 2560035 prezzo", encoding="utf-8")
+    (cart / "Collegamento 2560035 - 54612.txt").write_text("morsetti bobina", encoding="utf-8")
+    i = IndiceDocumenti(tmp_path / "i.db", tmp_path / "Doc")
+    i.aggiorna()
+    r = i.cerca_domanda("trova lo schema di collegamento della 2560035 con la consolle 54612")
+    assert [x["nome"] for x in r["proposti"]] == ["Collegamento 2560035 - 54612.txt"]
+    assert r["domanda"]["elenchi_esclusi"] == 1
