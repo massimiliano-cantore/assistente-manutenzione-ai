@@ -126,18 +126,20 @@ json.dump(classi, open(CLASSI, "w"))
 valori = [v for k, v in classi.items() if k != "_versione"]
 print("Classi:", {c: valori.count(c) for c in set(valori)}, flush=True)
 
-# schede: FRONTE + RETRO successivo nello stesso PDF
-schede = []
+# schede: FRONTE (+ RETRO che segue nello stesso PDF), oppure RETRO da solo (fronte mancante nella scansione)
+schede, usate = [], set()
 for i, p in enumerate(pagine):
-    if classi.get(p["pagina"]) != "FRONTE":
+    c = classi.get(p["pagina"])
+    if p["pagina"] in usate or c not in ("FRONTE", "RETRO"):
         continue
-    retro = None
-    if i + 1 < len(pagine) and pagine[i + 1]["file"] == p["file"] and classi.get(pagine[i + 1]["pagina"]) == "RETRO":
-        retro = pagine[i + 1]["pagina"]
-    if not retro:      # le schede vere hanno sempre fronte e retro: una pagina sola è quasi sempre altro
-        continue
+    gruppo = [p["pagina"]]
+    if c == "FRONTE" and i + 1 < len(pagine) and pagine[i + 1]["file"] == p["file"] \
+            and classi.get(pagine[i + 1]["pagina"]) == "RETRO":
+        gruppo.append(pagine[i + 1]["pagina"])
+    usate.update(gruppo)
     schede.append({"id": p["pagina"][:-4], "file": p["file"], "anno": p["anno"], "mese": p["mese"],
-                   "pagine": [p["pagina"], retro]})
+                   "pagine": gruppo, "tipo": "fronte e retro" if len(gruppo) == 2 else
+                   ("solo fronte" if c == "FRONTE" else "solo retro")})
 if os.environ.get("MAX_SCHEDE"):
     schede = schede[:int(os.environ["MAX_SCHEDE"])]
 print(len(schede), "schede da leggere", flush=True)
@@ -165,7 +167,8 @@ with open(OUT, "a") as fo:
         if pred is None and not motivi:
             motivi.append("JSON non valido")
         elif pred is not None:
-            motivi += [f"manca {c}" for c in STAMPATI if not pred.get(c)]
+            if s["tipo"] != "solo retro":          # sul retro non ci sono numero e articolo
+                motivi += [f"manca {c}" for c in STAMPATI if not pred.get(c)]
             nota = str(pred.get("note") or "").strip().lower() not in ("", "null", "none")
             if not pred["righe"] and not nota:     # tabella vuota con le note è normale; senza niente no
                 motivi.append("né righe né note")
