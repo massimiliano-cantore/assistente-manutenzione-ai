@@ -99,35 +99,23 @@ def chiedi(immagini, testo, proc, max_token):
     return proc.batch_decode(out[:, inp.input_ids.shape[1]:], skip_special_tokens=True)[0]
 
 
-DOMANDA_CLASSE = ("Guarda la pagina e rispondi con UNA sola lettera.\n"
-                  "A = in alto c'è un'intestazione stampata con 'Riparazione n.', 'Cliente', 'Articolo' (scheda di "
-                  "riparazione OPERA, 'COPIA RIPARAZIONE') e sotto una tabella Codice/Descrizione/Intervento/Pz.\n"
-                  "B = la pagina è soprattutto un grande riquadro NOTE scritto a mano, SENZA l'intestazione con cliente "
-                  "e articolo (retro della scheda).\n"
-                  "C = documento di trasporto, bolla, fattura, lettera, e-mail o modulo di un'altra azienda.\n"
-                  "D = pagina bianca o altro.\n"
-                  "Lettera:")
-LETTERE = {"A": "FRONTE", "B": "RETRO", "C": "DDT", "D": "ALTRO"}
+DOMANDA_CLASSE = ("In alto nella pagina c'è un modulo stampato con le voci 'Riparazione n.', 'Cliente' e 'Articolo' "
+                  "(scheda di riparazione OPERA)? Rispondi solo SI oppure NO.")
 
 classi = json.load(open(CLASSI)) if os.path.exists(CLASSI) else {}
-if classi and classi.get("_versione") != 4:     # classificate con la domanda vecchia: si rifanno
+if classi and classi.get("_versione") != 5:     # classificate con la domanda vecchia: si rifanno
     classi = {}
-classi["_versione"] = 4
+classi["_versione"] = 5
 t0 = time.time()
 for i, p in enumerate(pagine):
     if p["pagina"] in classi:
         continue
-    r = chiedi([f"{CARTELLA_PAGINE}/{p['pagina']}"], DOMANDA_CLASSE, proc_grande, 3).strip().upper()
-    classi[p["pagina"]] = LETTERE.get(r[:1], "ALTRO")
+    r = chiedi([f"{CARTELLA_PAGINE}/{p['pagina']}"], DOMANDA_CLASSE, proc_piccolo, 3).strip().upper()
+    classi[p["pagina"]] = "FRONTE" if r.startswith("S") else "ALTRO"
     if i % 25 == 0:
         json.dump(classi, open(CLASSI, "w"))
         print(f"classificate {len(classi)}/{len(pagine)} ({time.time() - t0:.0f} s)", flush=True)
 json.dump(classi, open(CLASSI, "w"))
-# due retro di fila nello stesso PDF non esistono: il primo è un fronte letto male
-for i in range(1, len(pagine)):
-    a, b = pagine[i - 1], pagine[i]
-    if a["file"] == b["file"] and classi.get(a["pagina"]) == "RETRO" and classi.get(b["pagina"]) == "RETRO":
-        classi[a["pagina"]] = "FRONTE"
 json.dump(classi, open(CLASSI, "w"))
 valori = [v for k, v in classi.items() if k != "_versione"]
 print("Classi:", {c: valori.count(c) for c in set(valori)}, flush=True)
@@ -139,8 +127,9 @@ for i, p in enumerate(pagine):
     if p["pagina"] in usate or c != "FRONTE":       # i retro da soli si scartano: troppo spesso non sono schede
         continue
     gruppo = [p["pagina"]]
+    # il retro è la pagina dopo il fronte, se non è a sua volta un fronte (i DDT stanno all'inizio del PDF)
     if c == "FRONTE" and i + 1 < len(pagine) and pagine[i + 1]["file"] == p["file"] \
-            and classi.get(pagine[i + 1]["pagina"]) == "RETRO":
+            and classi.get(pagine[i + 1]["pagina"]) != "FRONTE":
         gruppo.append(pagine[i + 1]["pagina"])
     usate.update(gruppo)
     schede.append({"id": p["pagina"][:-4], "file": p["file"], "anno": p["anno"], "mese": p["mese"],
@@ -174,12 +163,7 @@ with open(OUT, "a") as fo:
                     or any(str(r.get("descrizione", "")).startswith("Componente ") for r in pred["righe"]):
                 pred, motivi = None, ["non è una scheda (risposta inventata dal modello)"]
             elif not re.fullmatch(r"\s*\d{1,4}\s*/\s*\d{1,4}\s*", str(pred.get("riparazione_n") or "")):
-                if s["tipo"] == "solo retro":     # sul retro non c'è l'intestazione: valori inventati, si tolgono
-                    for c in ("riparazione_n", "data", "ditta", "articolo", "prodotto_il", "seriale", "firmware",
-                              "tempo_riparazione"):
-                        pred[c] = None
-                else:
-                    motivi.append("numero riparazione non valido")
+                pred, motivi = None, ["non è una scheda (numero di riparazione assente o non valido)"]
         if pred is None and motivi and motivi[0].startswith("non è una scheda"):
             print(f"{k + 1}/{len(schede)} {s['id']} scartata: {motivi[0]}", flush=True)
             fo.write(json.dumps({**s, "pred": None, "grezzo": None, "scartata": True, "da_controllare": False,
